@@ -1435,7 +1435,8 @@
           formatter: params => {
             if (!params || !params[0]) return "";
             const p = params[0];
-            return `📅 ${p.data[0]}<br/>${isStarMode ? '⭐ 累计 Stars' : '📦 累计 Commits'}: <strong>${p.data[1]}</strong><br/>👤 @${p.data[2] || 'contributor'}`;
+            const authorOrUser = (p.data && p.data[2]) ? p.data[2] : (isStarMode ? "stargazer" : "developer");
+            return `📅 ${p.data[0]}<br/>${isStarMode ? '⭐ 累计 Stars' : '📦 累计 Commits'}: <strong>${p.data[1]}</strong><br/>👤 @${authorOrUser}`;
           }
         },
         xAxis: {
@@ -1529,7 +1530,7 @@
 
       echartInstance.setOption({
         series: [{
-          data: visiblePoints.map(p => [p[0], p[1]]),
+          data: visiblePoints.map(p => [p[0], p[1], p[2]]),
           markPoint: {
             data: activeMilestones
           },
