@@ -1,14 +1,8 @@
-# gh-skill
+# repo-evolution-visualizer
 
-面向 AI 编码智能体（Antigravity、Codex、Cursor、Claude Code 等）的专业 GitHub 与代码仓库分析技能套件。
+> 🎨 **面向 AI 编码智能体（Antigravity、Codex、Cursor、Claude Code 等）与开发者的全自动 Git 仓库演进、Star 历史与贡献者手绘动态可视化套件。**
 
----
-
-## 🌟 Skills 一览
-
-| Skill | 类别 | 说明 | 交互入口 |
-| :--- | :--- | :--- | :--- |
-| [`repo-evolution-visualizer`](skills/repo-evolution-visualizer/) | **代码演进与社区可视化** | 将任意 Git 仓库历史、GitHub Star 曲线、贡献者轨迹与里程碑，生成高度复用、纯手绘涂鸦风（Hand-Drawn Doodle）的交互式 Web 演化看板与 60FPS 极清展示视频 | [查看 Skill 规范](skills/repo-evolution-visualizer/SKILL.md) |
+将任意 Git 仓库历史、GitHub Star 增长曲线、贡献者星环与里程碑，生成高度复用、纯手绘涂鸦风（Hand-Drawn Doodle）的交互式 Web 演化看板与 60FPS 极清展示视频。
 
 ---
 
@@ -18,15 +12,15 @@
   <img src="assets/demo_animation.gif" alt="Repository Evolution Visualizer Animated Demo" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);" />
 </p>
 
-> 💡 **动态演进演示**：上方为实况动态预览（自动循环播放）。
+> 💡 **动态演进实况**：上方为实况动态预览（自动循环播放）。
 > 
-> 📦 **高清原片与发行包下载**：为保持 Git 仓库极致轻量（快速 Clone），完整 60FPS 极清演示视频及独立打包的 Skill 压缩包推荐直接前往 [**GitHub Releases 发行页面**](../../releases) 下载！
+> 📦 **发行包与 60FPS 原片下载**：为保持 Git 仓库极致轻量（秒速 Clone），独立打包的 Skill 压缩包及完整 60FPS 极清演示视频原片推荐直接前往 [**GitHub Releases 发行页面**](../../releases) 下载！
 
 ---
 
-## 🎨 `repo-evolution-visualizer` 核心特色
+## 🎨 核心设计与视觉特色
 
-这是一个专为开源项目一周年庆典、年度总结、社区答谢以及技术演进汇报打造的自动化可视化套件。
+专为开源项目一周年庆典、年度总结、社区答谢以及技术演进汇报打造的自动化可视化套件：
 
 ```text
        ┌────────────────────────────────────────────────────────┐
@@ -44,20 +38,19 @@
        └────────────────────────────────────────────────────────┘
 ```
 
-### 1. 极致手绘涂鸦设计美学（Hand-Drawn Doodle）
-- **实体暖白纸张底色（`#fffef5`）** 与温润的笔记本细网格；
-- **高对比墨黑手绘虚线边框（`#2c2c2c`）** 与硬核标记笔微阴影（珊瑚红 `#ff6b6b`、明黄 `#ffd93d`、绿松石 `#4ecdc4`）；
-- **拒绝冷冰冰的机器代号与多余 Emoji**，打造极具辨识度与温度的工程手绘感。
+1. **极致手绘涂鸦设计美学（Hand-Drawn Doodle）**：
+   - 实体暖白纸张底色（`#fffef5`）与温润的笔记本细网格；
+   - 高对比墨黑手绘虚线边框（`#2c2c2c`）与硬核标记笔微阴影（珊瑚红 `#ff6b6b`、明黄 `#ffd93d`、绿松石 `#4ecdc4`）；
+   - 拒绝冷冰冰的机器代号与多余 Emoji，打造极具辨识度与温度的工程手绘感。
+2. **严谨的架构拓扑与天体物理引擎**：
+   - **手绘核心辐射拓扑**：中央为仓库 Logo 徽章（优先从 GitHub 获取仓库/组织头像），四周环绕架构模块卡片，虚线辐射连接层严格下沉至 Logo 底层；
+   - **向日葵黄金角分布（Sunflower Phyllotaxis）**：代码文件以自然的向日葵点阵永久驻留，真实展现代码库的茁壮成长；
+   - **360° 天体环平滑自转与提交俯冲**：贡献者在外环如行星般持续旋转，提交时光束俯冲点亮文件，播放结束平滑归位。
+3. **全页面 25Mbps 60FPS 极清录制与 MP4 导出**：
+   - **交互式整页录制**：通过浏览器原生 `getDisplayMedia` 捕获完整导航栏、趋势图、里程碑流与排行榜；
+   - **AI 全自动静默导出**：调用 `record_and_export_mp4.py` 无需任何人工干预，直接在后台生成 CRF 14（视觉无损）标准 H.264 MP4 视频！
 
-### 2. 严谨的架构拓扑与天体物理引擎
-- **手绘核心辐射拓扑**：中央为仓库 Logo 徽章，四周环绕顶层架构模块，虚线辐射连接层严格下沉至 Logo 底层；
-- **向日葵黄金角分布（Sunflower Phyllotaxis）**：代码文件以自然的向日葵点阵永久驻留，真实展现代码库的茁壮成长；
-- **360° 天体环平滑自转与提交俯冲**：贡献者在外环如行星般持续旋转，提交时光束俯冲点亮文件，播放结束平滑归位。
-
-### 3. 全页面 25Mbps 60FPS 极清录制与 1 键 MP4 导出
-- **整页 UI 完整录制**：通过浏览器原生 `getDisplayMedia` 捕获完整导航栏、趋势图、里程碑流与排行榜；
-- **一键开播与自动下载**：点击录制自动从 Day 1 重置并播放，停止后自动下载超清录像；
-- **一键无损转码**：配备 `convert_to_mp4.bat`，1 秒调用 FFmpeg 输出 CRF 14（视觉无损）标准 H.264 MP4 视频！
+---
 
 ## 🛠️ 前置工具链与轻量化依赖
 
@@ -67,7 +60,7 @@
 | :--- | :--- | :---: | :---: | :--- |
 | **`Python 3.10+`** | 数据提取与运行环境 | **必需** | 超轻 | 仅标准库（**无需 `pip install` 任何包**） |
 | **`Git`** | 读取代码提交与作者历史 | **必需** | 超轻 | **Win**: `winget install --id Git.Git -e`<br>**Mac**: `brew install git`<br>**Linux**: `sudo apt install git` |
-| **现代浏览器** | 渲染 Canvas 看板与录制视频 | **Yes** | 原生 | Windows/macOS/Linux 自带 Chrome / Edge / Firefox |
+| **现代浏览器** | 渲染 Canvas 看板与录制视频 | **必需** | 原生 | Windows/macOS/Linux 自带 Chrome / Edge / Firefox |
 | **`GitHub CLI (gh)`** | 获取精确 Star 曲线与高频 API | *可选* | 轻量 | **Win**: `winget install --id GitHub.cli -e`<br>**Mac**: `brew install gh`<br>*(若不装可配置 `GITHUB_TOKEN` 或自动平滑模拟曲线)* |
 | **`FFmpeg`** | 将 WebM 录屏直接转为 MP4 | *可选* | 轻量 | **Win**: `winget install --id Gyan.FFmpeg -e`<br>**Mac**: `brew install ffmpeg`<br>**Linux**: `sudo apt install ffmpeg`<br>*(若不装，网页依然可直接下载 WebM 高清视频)* |
 
@@ -122,7 +115,7 @@ export GITHUB_TOKEN="ghp_your_token_here"
 
 #### 模式 A：交互式网页看板模式
 向 AI 发送：
-> *“请使用 `repo-evolution-visualizer` skill 为当前仓库生成一套演化可视化网页，并整理出核心里程碑事件。”*
+> *“请使用 `repo-evolution-visualizer` 为当前仓库生成一套演化可视化网页，并整理出核心里程碑事件。”*
 
 #### 模式 B：全自动静默导出 MP4 视频模式（无需人工录屏）
 向 AI 发送：
@@ -176,15 +169,20 @@ graph TD
 ## 📂 仓库目录结构
 
 ```text
-gh-skill/
+repo-evolution-visualizer/
 ├── README.md                      # 仓库综合介绍与使用指南
 ├── LICENSE                        # MIT 开源许可证
 ├── .gitignore                     # Git 忽略配置
+├── .gitattributes                 # 归档过滤与换行符规范
+├── .github/
+│   └── workflows/
+│       └── release.yml            # GitHub Actions 自动化发版流水线
 └── skills/
     └── repo-evolution-visualizer/ # 核心 Skill 包
         ├── SKILL.md               # 面向 AI 智能体的完整 Runbook 规范
         ├── scripts/
         │   ├── extract_repo_data.py   # 通用 Git & GitHub 数据提取引擎
+        │   ├── record_and_export_mp4.py # AI 全自动静默录制与 MP4 导出引擎
         │   ├── launch_visualizer.py   # 一键构建与本地启动器
         │   └── convert_to_mp4.bat     # 1 键 WebM 转 H.264 MP4 脚本
         ├── templates/
@@ -199,4 +197,4 @@ gh-skill/
 
 ## 📄 开源许可证
 
-本项目采用 [MIT License](LICENSE) 许可证开源，欢迎自由使用、分发与二开定制！
+本项目采用 [MIT License](LICENSE) 许可证开源，欢迎自由使用、分发与二次开发！

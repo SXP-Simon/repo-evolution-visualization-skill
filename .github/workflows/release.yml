@@ -41,10 +41,10 @@ jobs:
           TAG="${{ steps.vars.outputs.tag }}"
           mkdir -p dist
 
-          # 1. Package entire gh-skill repository bundle
-          zip -r "dist/gh-skill-${TAG}.zip" skills/ README.md LICENSE -x "*.pyc" "*__pycache__*"
+          # 1. Package entire repository bundle
+          zip -r "dist/repo-evolution-visualizer-bundle-${TAG}.zip" skills/ README.md LICENSE -x "*.pyc" "*__pycache__*"
 
-          # 2. Package individual repo-evolution-visualizer skill bundle
+          # 2. Package individual skill bundle
           cd skills
           zip -r "../dist/repo-evolution-visualizer-${TAG}.zip" repo-evolution-visualizer/ -x "*.pyc" "*__pycache__*"
           cd ..
@@ -60,7 +60,6 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            dist/gh-skill-*.zip
             dist/repo-evolution-visualizer-*.zip
             assets/demo_preview.png
             assets/demo_animation.gif
