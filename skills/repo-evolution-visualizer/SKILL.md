@@ -80,16 +80,26 @@ When this skill is activated, you (the AI Agent) should autonomously execute the
    - Include contributor shoutouts (`由 @username 贡献...`), PR references (`#123`), and categorized tags (`项目诞生`, `重磅功能`, `社区里程碑`, `生态拓展`, `周年纪念`).
    - *Reference*: Follow [Milestone Curation Rules](./references/milestone_curation_rules.md).
 
-### Phase 3: Data Extraction & Visualizer Deployment (数据提取与模板装配)
+### Phase 3: Author Deduplication & Data Extraction (作者身份去重与数据提取)
 
-Execute the extraction and template deployment:
+1. **Check for Author Aliases (可选/推荐)**:
+   - Check if a contributor used multiple names or email addresses in git log.
+   - You can create `<OUTPUT_DIR>/user_mapping.json` (or use `.mailmap`) to unify them to their canonical GitHub username:
+     ```json
+     {
+       "CanonicalGitHubUser": ["git_alias_1", "git_alias_2", "committer@email.com"]
+     }
+     ```
+   - *Reference*: Follow [Author Mapping & Alias Deduplication Guide](./references/author_mapping_guide.md).
 
+2. **Execute Data Extraction**:
 ```bash
 python skills/repo-evolution-visualizer/scripts/extract_repo_data.py \
   --repo-path "<PATH_TO_TARGET_REPO>" \
   --github-repo "<OWNER/REPO>" \
   --project-title "<AUTONOMOUSLY_FORMULATED_TITLE>" \
   --milestones-file "<OUTPUT_DIR>/milestones.json" \
+  --user-mapping "<OUTPUT_DIR>/user_mapping.json" \
   --output-dir "<OUTPUT_DIR>"
 ```
 
@@ -139,7 +149,7 @@ This automatically captures the WebM stream and converts it via FFmpeg (CRF 14, 
 | Script | Path | Purpose |
 | :--- | :--- | :--- |
 | **`record_and_export_mp4.py`** | [scripts/record_and_export_mp4.py](./scripts/record_and_export_mp4.py) | **AI-Automated End-to-End MP4 pipeline** (Extract + Render + Convert) |
-| **`extract_repo_data.py`** | [scripts/extract_repo_data.py](./scripts/extract_repo_data.py) | Universal Git & GitHub data extractor (Stars, Avatars, Logo, Commits) |
+| **`extract_repo_data.py`** | [scripts/extract_repo_data.py](./scripts/extract_repo_data.py) | Universal Git & GitHub data extractor (Stars, Avatars, Logo, Commits, Deduplication) |
 | **`launch_visualizer.py`** | [scripts/launch_visualizer.py](./scripts/launch_visualizer.py) | One-command build and browser launcher |
 | **`convert_to_mp4.bat`** | [scripts/convert_to_mp4.bat](./scripts/convert_to_mp4.bat) | 1-click WebM to H.264 MP4 converter |
 | **`visualizer_template.html`** | [templates/visualizer_template.html](./templates/visualizer_template.html) | Standalone Hand-Drawn Doodle visualizer |
@@ -148,6 +158,7 @@ This automatically captures the WebM stream and converts it via FFmpeg (CRF 14, 
 
 ## 📖 Reference Documentation
 
+- [Author Mapping & Alias Deduplication Guide](./references/author_mapping_guide.md)
 - [GitHub Permissions & Token Setup](./references/permissions_and_tokens.md)
 - [Architectural Module Classification Guide](./references/module_classification_guide.md)
 - [Milestone Curation & Plain-Language Copywriting](./references/milestone_curation_rules.md)

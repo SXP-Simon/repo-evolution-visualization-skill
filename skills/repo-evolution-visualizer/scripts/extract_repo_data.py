@@ -3,10 +3,14 @@
 Universal Repository Evolution Data Extractor.
 Extracts Git commits, GitHub Star history, contributor avatars, milestones, and logo
 into an origin-clean, self-contained JavaScript dataset for Web Visualizer.
+
+Features intelligent author deduplication, GitHub API identity mapping,
+.mailmap & user_mapping.json support, and multi-tier avatar resolution.
 """
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import re
@@ -58,12 +62,155 @@ def parse_mailmap(repo_dir: Path) -> dict:
                         if m:
                             proper_name = m.group(1).strip()
                             proper_email = m.group(2).strip().lower()
+                            commit_name = m.group(3).strip() if m.group(3) else ""
                             commit_email = m.group(4).strip().lower() if m.group(4) else proper_email
                             mailmap[commit_email] = proper_name
                             mailmap[proper_email] = proper_name
+                            if commit_name:
+                                mailmap[commit_name.lower()] = proper_name
         except Exception as e:
             print(f"[-] Warning: Failed to parse .mailmap: {e}", file=sys.stderr)
     return mailmap
+
+def parse_user_mapping(custom_file: Path = None, repo_dir: Path = None) -> dict:
+    """Parse user_mapping.json if present to unify author aliases to canonical GitHub usernames.
+    
+    Supports two JSON formats:
+    1. Group format: {"CanonicalUser": ["alias1", "alias2", "email1@..."]}
+    2. Direct alias format: {"alias1": "CanonicalUser", "email1@...": "CanonicalUser"}
+    """
+    candidates = []
+    if custom_file:
+        candidates.append(Path(custom_file))
+    if repo_dir:
+        candidates.extend([
+            repo_dir / "user_mapping.json",
+            repo_dir / "author_mapping.json",
+            repo_dir / ".github" / "user_mapping.json"
+        ])
+
+    mapping = {}
+    for p in candidates:
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8", errors="replace") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        for k, v in data.items():
+                            if isinstance(v, list):
+                                # Group format: Canonical -> [aliases]
+                                canonical = k.strip()
+                                for alias in v:
+                                    mapping[str(alias).strip().lower()] = canonical
+                            elif isinstance(v, str):
+                                # Direct alias format: alias -> Canonical
+                                mapping[str(k).strip().lower()] = v.strip()
+                print(f"  [+] Loaded user mapping rules from '{p.name}' ({len(mapping)} aliases mapped).")
+                break
+            except Exception as e:
+                print(f"[-] Warning: Failed to load user mapping from {p}: {e}", file=sys.stderr)
+    return mapping
+
+def fetch_github_author_mappings(github_repo: str, token: str = None) -> tuple[dict, dict, dict]:
+    """Discover real GitHub usernames and avatar URLs from repository contributors and commits API.
+    
+    Returns:
+        (email_to_login, name_to_login, login_to_avatar_url)
+    """
+    if not github_repo:
+        return {}, {}, {}
+
+    email_to_login = {}
+    name_to_login = {}
+    login_to_avatar_url = {}
+
+    headers = {"User-Agent": "RepoEvolutionVisualizer"}
+    auth_token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if auth_token:
+        headers["Authorization"] = f"token {auth_token}"
+
+    # 1. Fetch contributors list via gh CLI or REST API
+    try:
+        gh_cmd = ["gh", "api", f"repos/{github_repo}/contributors", "--paginate", "--jq", ".[] | {login: .login, avatar_url: .avatar_url}"]
+        res = subprocess.run(gh_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if res.returncode == 0 and res.stdout.strip():
+            for line in res.stdout.split("\n"):
+                line = line.strip()
+                if line:
+                    try:
+                        item = json.loads(line)
+                        login = item.get("login")
+                        av = item.get("avatar_url")
+                        if login:
+                            name_to_login[login.lower()] = login
+                            if av:
+                                login_to_avatar_url[login] = av
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    # REST fallback for contributors if needed
+    if not name_to_login:
+        try:
+            url = f"https://api.github.com/repos/{github_repo}/contributors?per_page=100"
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if isinstance(data, list):
+                    for item in data:
+                        login = item.get("login")
+                        av = item.get("avatar_url")
+                        if login:
+                            name_to_login[login.lower()] = login
+                            if av:
+                                login_to_avatar_url[login] = av
+        except Exception:
+            pass
+
+    # 2. Fetch recent commits to map git name/email -> GitHub login
+    try:
+        gh_cmd = ["gh", "api", f"repos/{github_repo}/commits?per_page=100", "--jq", ".[] | {login: .author.login, name: .commit.author.name, email: .commit.author.email, avatar: .author.avatar_url}"]
+        res = subprocess.run(gh_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if res.returncode == 0 and res.stdout.strip():
+            for line in res.stdout.split("\n"):
+                line = line.strip()
+                if line:
+                    try:
+                        item = json.loads(line)
+                        login = item.get("login")
+                        name = item.get("name")
+                        email = item.get("email")
+                        avatar = item.get("avatar")
+                        if login:
+                            if avatar:
+                                login_to_avatar_url[login] = avatar
+                            if email:
+                                email_to_login[email.strip().lower()] = login
+                            if name:
+                                name_to_login[name.strip().lower()] = login
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    if name_to_login or email_to_login:
+        print(f"  [+] Discovered {len(login_to_avatar_url)} official GitHub contributors for identity resolution.")
+
+    return email_to_login, name_to_login, login_to_avatar_url
+
+def clean_author_name(name: str) -> str:
+    """Normalize raw git author name by stripping machine names and format anomalies."""
+    if not name:
+        return "developer"
+    # Strip email if embedded in name e.g. "Name <email@...>"
+    name = re.sub(r"<[^>]+>", "", name).strip()
+    # Strip machine/hostname noise e.g. "Simon (Simon's MacBook Pro)", "admin@DESKTOP-12345"
+    name = re.sub(r"\s*\([^\)]*macbook[^\)]*\)", "", name, flags=re.IGNORECASE).strip()
+    name = re.sub(r"\s*\([^\)]*desktop[^\)]*\)", "", name, flags=re.IGNORECASE).strip()
+    name = re.sub(r"\s*\([^\)]*laptop[^\)]*\)", "", name, flags=re.IGNORECASE).strip()
+    name = re.sub(r"\s*\[bot\]", "[bot]", name, flags=re.IGNORECASE).strip()
+    return name or "developer"
 
 def get_git_remote_repo(repo_dir: Path) -> str:
     """Extract owner/repo from git remote origin URL if possible."""
@@ -79,9 +226,20 @@ def get_git_remote_repo(repo_dir: Path) -> str:
         pass
     return ""
 
-def extract_git_commits(repo_dir: Path, mailmap: dict, bot_filter: set) -> tuple[list, list]:
-    """Extract all git commits with numstat metrics."""
-    print("[1/5] Extracting Git commit history with numstat...")
+def extract_git_commits(
+    repo_dir: Path,
+    mailmap: dict,
+    user_mapping: dict,
+    gh_email_to_login: dict,
+    gh_name_to_login: dict,
+    bot_filter: set
+) -> tuple[list, list, dict]:
+    """Extract all git commits with numstat metrics and unified canonical author mapping.
+    
+    Returns:
+        (commits, sorted_contributors, author_primary_email)
+    """
+    print("[1/5] Extracting Git commit history with numstat and identity deduplication...")
     cmd = ["git", "log", "--all", "--reverse", "--numstat", "--format=COMMIT|%H|%at|%an|%ae|%s"]
     try:
         raw_log = subprocess.check_output(
@@ -94,6 +252,33 @@ def extract_git_commits(repo_dir: Path, mailmap: dict, bot_filter: set) -> tuple
     commits = []
     current_commit = None
     contributors_seen = {}
+    author_emails = {}
+
+    def resolve_author(raw_name: str, raw_email: str) -> str:
+        name_clean = clean_author_name(raw_name)
+        name_lower = name_clean.lower()
+        email_lower = raw_email.lower()
+
+        # 1. Custom user_mapping.json priority
+        if email_lower in user_mapping:
+            return user_mapping[email_lower]
+        if name_lower in user_mapping:
+            return user_mapping[name_lower]
+
+        # 2. .mailmap priority
+        if email_lower in mailmap:
+            return mailmap[email_lower]
+        if name_lower in mailmap:
+            return mailmap[name_lower]
+
+        # 3. Discovered GitHub official API login mapping
+        if email_lower in gh_email_to_login:
+            return gh_email_to_login[email_lower]
+        if name_lower in gh_name_to_login:
+            return gh_name_to_login[name_lower]
+
+        # 4. Cleaned name fallback
+        return name_clean
 
     for line in raw_log.split("\n"):
         line = line.strip()
@@ -109,17 +294,20 @@ def extract_git_commits(repo_dir: Path, mailmap: dict, bot_filter: set) -> tuple
             raw_email = parts[4].strip().lower()
             msg = parts[5].strip() if len(parts) > 5 else ""
 
-            # Check bot
+            # Check bot filter on raw info
             if raw_author.lower() in bot_filter or raw_email in bot_filter:
                 current_commit = None
                 continue
 
-            author = mailmap.get(raw_email, mailmap.get(raw_author, raw_author))
+            author = resolve_author(raw_author, raw_email)
             if author.lower() in bot_filter:
                 current_commit = None
                 continue
 
             contributors_seen[author] = contributors_seen.get(author, 0) + 1
+            if author not in author_emails and raw_email:
+                author_emails[author] = raw_email
+
             current_commit = {
                 "hash": chash,
                 "timestamp": timestamp,
@@ -147,8 +335,8 @@ def extract_git_commits(repo_dir: Path, mailmap: dict, bot_filter: set) -> tuple
     sorted_contributors = [
         k for k, _ in sorted(contributors_seen.items(), key=lambda x: x[1], reverse=True)
     ]
-    print(f"  [+] Extracted {len(commits)} commits from {len(sorted_contributors)} human contributors.")
-    return commits, sorted_contributors
+    print(f"  [+] Extracted {len(commits)} commits from {len(sorted_contributors)} unique contributors (after alias deduplication).")
+    return commits, sorted_contributors, author_emails
 
 def fetch_github_stars(github_repo: str, token: str = None) -> list:
     """Fetch GitHub stargazers timestamps via gh CLI or GitHub REST API."""
@@ -177,7 +365,6 @@ def fetch_github_stars(github_repo: str, token: str = None) -> list:
                         item = json.loads(line)
                         iso_t = item.get("starred_at")
                         if iso_t:
-                            # Convert ISO-8601 to Unix timestamp
                             import datetime
                             dt = datetime.datetime.fromisoformat(iso_t.replace("Z", "+00:00"))
                             star_events.append({
@@ -287,26 +474,61 @@ def extract_git_milestones(repo_dir: Path, commits: list, custom_milestones_file
     print(f"  [+] Compiled {len(milestones)} milestones.")
     return milestones
 
-def fetch_contributor_avatars(contributors: list, cache_dir: Path) -> dict:
-    """Download contributor avatars from GitHub and encode as Base64 Data URIs."""
+def fetch_contributor_avatars(
+    contributors: list,
+    cache_dir: Path,
+    login_to_avatar_url: dict = None,
+    author_emails: dict = None
+) -> dict:
+    """Download contributor avatars with multi-tier fallback: GitHub API URL -> GitHub Login -> Gravatar -> SVG Badge."""
     print(f"[4/5] Caching and encoding avatars for {len(contributors)} contributors...")
     cache_dir.mkdir(parents=True, exist_ok=True)
     avatars_b64 = {}
+    login_to_avatar_url = login_to_avatar_url or {}
+    author_emails = author_emails or {}
 
     for name in contributors:
         avatar_path = cache_dir / f"{name}.png"
-        if not avatar_path.exists():
-            # Try fetching from GitHub
-            url = f"https://github.com/{name}.png?size=120"
-            try:
-                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    avatar_path.write_bytes(resp.read())
-            except Exception:
-                pass
+        if not avatar_path.exists() or avatar_path.stat().st_size == 0:
+            downloaded = False
+            # Priority 1: GitHub API direct avatar URL
+            if name in login_to_avatar_url:
+                try:
+                    url = login_to_avatar_url[name]
+                    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=6) as resp:
+                        avatar_path.write_bytes(resp.read())
+                        downloaded = True
+                except Exception:
+                    pass
+
+            # Priority 2: Standard GitHub username avatar
+            if not downloaded:
+                url = f"https://github.com/{name}.png?size=120"
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=6) as resp:
+                        avatar_path.write_bytes(resp.read())
+                        downloaded = True
+                except Exception:
+                    pass
+
+            # Priority 3: Gravatar via author's email hash
+            if not downloaded and name in author_emails:
+                email = author_emails[name].strip().lower()
+                if email and "@" in email:
+                    md5_hash = hashlib.md5(email.encode("utf-8")).hexdigest()
+                    gravatar_url = f"https://www.gravatar.com/avatar/{md5_hash}?d=404&s=120"
+                    try:
+                        req = urllib.request.Request(gravatar_url, headers={"User-Agent": "Mozilla/5.0"})
+                        with urllib.request.urlopen(req, timeout=6) as resp:
+                            avatar_path.write_bytes(resp.read())
+                            downloaded = True
+                    except Exception:
+                        pass
 
         if not avatar_path.exists() or avatar_path.stat().st_size == 0:
-            # Generate fallback hand-drawn letter badge SVG
+            # Priority 4: Generate crisp, deterministic hand-drawn SVG letter badge
             initial = (name[:2] if len(name) >= 2 else name).upper()
             colors = ["#4ecdc4", "#ff6b6b", "#ffd93d", "#6c5ce7", "#a8e6cf", "#ff8b94"]
             bg = colors[sum(ord(c) for c in name) % len(colors)]
@@ -359,21 +581,28 @@ def find_and_encode_logo(repo_dir: Path, github_repo: str = "", cache_dir: Path 
         if p.exists():
             mime = "image/svg+xml" if p.suffix == ".svg" else f"image/{p.suffix.lstrip('.')}"
             data = p.read_bytes()
-            print(f"  [+] Found local repository logo at: {p.relative_to(repo_dir)}")
+            print(f"  [+] Using local repository logo from '{p.name}'")
             return f"data:{mime};base64," + base64.b64encode(data).decode("ascii")
 
-    return ""
+    # 3. Fallback: Hand-drawn repo icon badge
+    svg_fallback = '''<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="#2c2c2c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
+  <path d="M6 6h10"/>
+  <path d="M6 10h10"/>
+</svg>'''
+    return "data:image/svg+xml;base64," + base64.b64encode(svg_fallback.encode("utf-8")).decode("ascii")
 
 def main():
     parser = argparse.ArgumentParser(description="Extract Git & GitHub evolution dataset for Web Visualizer.")
-    parser.add_argument("--repo-path", type=str, default=".", help="Path to local git repository.")
-    parser.add_argument("--github-repo", type=str, default="", help="GitHub owner/repo (e.g. SXP-Simon/AstrBot).")
-    parser.add_argument("--output-dir", type=str, default="web_visualizer", help="Output directory.")
-    parser.add_argument("--project-title", type=str, default="", help="Custom project title (e.g. 'AstrBot 智能机器人演化史').")
-    parser.add_argument("--core-label", type=str, default="核心代码", help="Center hub core badge label.")
-    parser.add_argument("--modules-file", type=str, default="", help="Custom architecture modules JSON file.")
-    parser.add_argument("--milestones-file", type=str, default="", help="Path to custom curated milestones JSON file.")
-    parser.add_argument("--token", type=str, default="", help="GitHub Personal Access Token for rate limits.")
+    parser.add_argument("--repo-path", default=".", help="Path to target Git repository")
+    parser.add_argument("--github-repo", default="", help="GitHub 'owner/repo' identifier")
+    parser.add_argument("--project-title", default="", help="Project showcase title")
+    parser.add_argument("--core-label", default="核心代码", help="Center hub badge label")
+    parser.add_argument("--output-dir", default="./web_visualizer", help="Output directory for visualizer files")
+    parser.add_argument("--milestones-file", default="", help="Optional JSON file with curated milestones")
+    parser.add_argument("--modules-file", default="", help="Optional JSON file with architecture modules")
+    parser.add_argument("--user-mapping", default="", help="Optional JSON file with author alias mappings")
+    parser.add_argument("--token", default="", help="GitHub Personal Access Token for higher rate limits")
     args = parser.parse_args()
 
     check_environment_health()
@@ -389,6 +618,8 @@ def main():
 
     github_repo = args.github_repo or get_git_remote_repo(repo_dir)
     mailmap = parse_mailmap(repo_dir)
+    user_mapping = parse_user_mapping(Path(args.user_mapping) if args.user_mapping else None, repo_dir)
+    gh_email_to_login, gh_name_to_login, login_to_avatar_url = fetch_github_author_mappings(github_repo, args.token)
 
     # Auto-detect title from README.md if not explicitly specified
     project_title = args.project_title
@@ -400,7 +631,6 @@ def main():
                     for line in rm.read_text(encoding="utf-8", errors="ignore").split("\n"):
                         line = line.strip()
                         if line.startswith("# "):
-                            # Extract clean title without badges or emojis
                             clean_t = re.sub(r"[#\*\!\[\]\(\)]", "", line).strip()
                             clean_t = re.sub(r"^\s*[:\-\_]+\s*", "", clean_t)
                             if clean_t:
@@ -414,14 +644,16 @@ def main():
     if not project_title:
         project_title = repo_dir.name
 
-    commits, contributors = extract_git_commits(repo_dir, mailmap, DEFAULT_BOTS)
+    commits, contributors, author_emails = extract_git_commits(
+        repo_dir, mailmap, user_mapping, gh_email_to_login, gh_name_to_login, DEFAULT_BOTS
+    )
     stars = fetch_github_stars(github_repo, args.token)
     milestones = extract_git_milestones(
         repo_dir, commits, Path(args.milestones_file) if args.milestones_file else None
     )
 
     avatar_cache_dir = out_dir / "avatars_cache"
-    avatars_b64 = fetch_contributor_avatars(contributors, avatar_cache_dir)
+    avatars_b64 = fetch_contributor_avatars(contributors, avatar_cache_dir, login_to_avatar_url, author_emails)
     logo_b64 = find_and_encode_logo(repo_dir, github_repo, avatar_cache_dir, args.token)
 
     # Custom modules if provided
