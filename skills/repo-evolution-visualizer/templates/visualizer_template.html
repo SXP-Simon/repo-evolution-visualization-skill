@@ -883,6 +883,14 @@
       canvas.width = width * window.devicePixelRatio;
       canvas.height = height * window.devicePixelRatio;
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      // Auto-fit camera zoom dynamically based on total contributors & largest orbital tier
+      const totalDevs = (data && data.contributors) ? data.contributors.length : 0;
+      const numTiers = totalDevs > 90 ? 4 : totalDevs > 45 ? 3 : totalDevs > 18 ? 2 : 1;
+      const maxOrbitR = 340 + (numTiers - 1) * 54 + 40;
+      const minDim = Math.min(width, height);
+      const idealZoom = Math.min(0.85, (minDim * 0.44) / maxOrbitR);
+      camera.zoom = Math.max(0.45, idealZoom);
     }
     resizeCanvas();
     window.addEventListener("resize", () => {
@@ -933,6 +941,10 @@
       const picked = sortedDirs.slice(0, 6);
       if (picked.length === 0) picked.push("core", "src", "docs", "test");
 
+      const totalFilesEstimate = dirCount.size > 0 ? Array.from(dirCount.values()).reduce((a, b) => a + b, 0) : 0;
+      const modRadiusX = totalFilesEstimate > 500 ? 205 : 180;
+      const modRadiusY = totalFilesEstimate > 500 ? 135 : 115;
+
       const palette = ["#4ecdc4", "#ff6b6b", "#ffd93d", "#4ecdc4", "#ff6b6b", "#ffd93d"];
       const n = picked.length;
       return picked.map((name, i) => {
@@ -940,8 +952,8 @@
         return {
           id: `mod_${i}_${name}`,
           name: name,
-          x: Math.round(Math.cos(angle) * 180),
-          y: Math.round(Math.sin(angle) * 115),
+          x: Math.round(Math.cos(angle) * modRadiusX),
+          y: Math.round(Math.sin(angle) * modRadiusY),
           color: palette[i % palette.length],
           pattern: name.toLowerCase()
         };
@@ -1015,7 +1027,7 @@
     }
     const sparkParticles = [];
 
-    // Persistent Dynamic File Dot (Natural Sunflower Phyllotaxis Cluster)
+    // Persistent Dynamic File Dot (Natural Sunflower Phyllotaxis Cluster with Adaptive Compaction)
     class ActiveFilePill {
       constructor(path, mod, slotIndex = 0) {
         this.path = path || "main.py";
@@ -1023,9 +1035,11 @@
         this.mod = mod || MODULE_CLUSTERS[0];
         this.slotIndex = slotIndex;
         
-        // Natural sunflower phyllotaxis cluster (Uniform 2D organic distribution, zero spiral arms)
+        // Natural sunflower phyllotaxis cluster with sub-linear adaptive compaction
+        // Keeps large modules (>500 files) bounded within max 96px radius to prevent cluster collisions!
         const phi = 1.61803398875;
-        const r = 16 + Math.sqrt(slotIndex) * 7.5;
+        const maxModRadius = 96;
+        const r = Math.min(maxModRadius, 14 + Math.pow(slotIndex, 0.46) * 4.8);
         const theta = slotIndex * 2 * Math.PI * (1 - 1 / phi);
         this.x = this.mod.x + Math.cos(theta) * r;
         this.y = this.mod.y + Math.sin(theta) * r;
@@ -1054,7 +1068,7 @@
       }
     }
 
-    // Developer Actor (Outer Celestial Ring with Dynamic Commit Swoop)
+    // Developer Actor (Multi-Tier Celestial Orbit with Anti-Collision Radial Staggering)
     class DeveloperActor {
       constructor(login, firstCommitTime, index, total) {
         this.login = login;
@@ -1067,10 +1081,21 @@
         this.locDeleted = 0;
         this.lruHeat = 0;
         this.pulseScale = 1.0;
+        this.rankIndex = index;
 
-        // Clean 360° celestial ring distribution (double staggered radius)
-        this.slotAngle = (index / Math.max(1, total)) * Math.PI * 2;
-        this.homeRadius = 345 + (index % 2 === 0 ? 0 : 32);
+        // Multi-tier planetary orbital distribution:
+        // Automatically splits contributors across 1~4 concentric rings to guarantee breathing space
+        const numTiers = total > 90 ? 4 : total > 45 ? 3 : total > 18 ? 2 : 1;
+        const tier = index % numTiers;
+        const baseR = 340 + tier * 54;
+        
+        const itemsInTier = Math.ceil(total / numTiers);
+        const tierIndex = Math.floor(index / numTiers);
+        // Golden ratio angle offset between tiers to prevent radial alignment crowding
+        const tierPhaseOffset = tier * 2.399963229728653; // Golden angle in radians
+        
+        this.slotAngle = (tierIndex / Math.max(1, itemsInTier)) * Math.PI * 2 + tierPhaseOffset;
+        this.homeRadius = baseR;
         this.homeX = Math.cos(this.slotAngle) * this.homeRadius;
         this.homeY = Math.sin(this.slotAngle) * this.homeRadius;
 
@@ -1756,24 +1781,25 @@
       ctx.restore();
 
       // 3. Draw Persistent File Dots around their Module Cluster
+      const dotRadius = activeFilePills.size > 500 ? 2.8 : activeFilePills.size > 200 ? 3.5 : 4.2;
       for (const [path, pill] of activeFilePills.entries()) {
         ctx.save();
         ctx.fillStyle = pill.color;
         ctx.strokeStyle = "#2c2c2c";
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = 1.2;
         ctx.globalAlpha = Math.max(0.35, Math.min(1.0, pill.alpha));
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
-        ctx.arc(pill.x, pill.y, 4.5, 0, Math.PI * 2);
+        ctx.arc(pill.x, pill.y, dotRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
         // Pulse ring on edit
         if (pill.pulseVal > 0) {
           ctx.strokeStyle = pill.pulseColor;
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1.8;
           ctx.beginPath();
-          ctx.arc(pill.x, pill.y, 4.5 + 16 * (1 - pill.pulseVal), 0, Math.PI * 2);
+          ctx.arc(pill.x, pill.y, dotRadius + 14 * (1 - pill.pulseVal), 0, Math.PI * 2);
           ctx.stroke();
           pill.pulseVal = Math.max(0, pill.pulseVal - 0.03);
         }
@@ -1831,7 +1857,7 @@
         }
       });
 
-      // 7. Draw Developer Avatars (Doodle Style in 360° Ring)
+      // 7. Draw Developer Avatars (Doodle Style in Multi-Tier Orbit with Smart Anti-Crowding)
       developers.forEach(dev => {
         if (!dev.isJoined || dev.spawnScale <= 0) return;
         ctx.save();
@@ -1839,12 +1865,12 @@
         ctx.scale(dev.spawnScale * dev.pulseScale, dev.spawnScale * dev.pulseScale);
 
         const avImg = avatarImages[dev.login];
-        const r = 14;
+        const r = 13.5;
 
         // Hard Offset Badge Shadow
         ctx.fillStyle = "#4ecdc4";
         ctx.beginPath();
-        ctx.arc(2.5, 2.5, r + 1, 0, Math.PI * 2);
+        ctx.arc(2.2, 2.2, r + 0.8, 0, Math.PI * 2);
         ctx.fill();
 
         // Expanding spawn ripple when joining
@@ -1883,13 +1909,41 @@
         ctx.stroke();
         ctx.restore();
 
-        // Developer Name (Ink Black)
-        ctx.save();
-        ctx.font = "bold 11px sans-serif";
-        ctx.fillStyle = "#2c2c2c";
-        ctx.textAlign = "center";
-        ctx.fillText(dev.login, dev.x, dev.y - 18);
-        ctx.restore();
+        // Developer Name (Smart Visibility & Anti-Crowding)
+        // Only render labels when:
+        // 1. Total contributors <= 25 (compact repos)
+        // 2. Or this developer is actively committing (dev.laserProgress > 0 or dev.activeTimer > 0)
+        // 3. Or this developer is newly joined (dev.spawnRipple > 0)
+        // 4. Or this developer is in the Top 6 most active committers
+        const showLabel = (developers.size <= 25) ||
+                          (dev.laserProgress > 0) ||
+                          (dev.activeTimer > 0) ||
+                          (dev.spawnRipple > 0) ||
+                          (dev.rankIndex < 6);
+
+        if (showLabel) {
+          ctx.save();
+          if (dev.laserProgress > 0) {
+            ctx.font = "bold 11px sans-serif";
+            const txt = `@${dev.login}`;
+            const tw = ctx.measureText(txt).width;
+            ctx.fillStyle = "#ffd93d";
+            ctx.fillRect(dev.x - tw / 2 - 4, dev.y - 28, tw + 8, 16);
+            ctx.strokeStyle = "#2c2c2c";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 2]);
+            ctx.strokeRect(dev.x - tw / 2 - 4, dev.y - 28, tw + 8, 16);
+            ctx.fillStyle = "#2c2c2c";
+            ctx.textAlign = "center";
+            ctx.fillText(txt, dev.x, dev.y - 16);
+          } else {
+            ctx.font = "bold 9.5px sans-serif";
+            ctx.fillStyle = "#2c2c2c";
+            ctx.textAlign = "center";
+            ctx.fillText(dev.login, dev.x, dev.y - (r + 3.5));
+          }
+          ctx.restore();
+        }
       });
 
       ctx.restore();
