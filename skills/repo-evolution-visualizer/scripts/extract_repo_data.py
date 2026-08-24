@@ -4,8 +4,8 @@ Universal Repository Evolution Data Extractor.
 Extracts Git commits, GitHub Star history, contributor avatars, milestones, and logo
 into an origin-clean, self-contained JavaScript dataset for Web Visualizer.
 
-Features intelligent author deduplication, GitHub API identity mapping,
-.mailmap & user_mapping.json support, and multi-tier avatar resolution.
+Features robust, safe author deduplication, explicit user_mapping & .mailmap priority,
+GitHub verified noreply extraction, unmapped contributor diagnostics, and starter templates.
 """
 
 import argparse
@@ -56,8 +56,7 @@ def parse_mailmap(repo_dir: Path) -> dict:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#"):
-                        # Format: Proper Name <proper@email.xx> <commit@email.xx>
-                        # or: Proper Name <proper@email.xx> Commit Name <commit@email.xx>
+                        # Format: Proper Name <proper@email.xx> Commit Name <commit@email.xx>
                         m = re.match(r"^([^\<]+)\<([^\>]+)\>(?:\s+([^\<]*)\<([^\>]+)\>)?", line)
                         if m:
                             proper_name = m.group(1).strip()
@@ -105,23 +104,22 @@ def parse_user_mapping(custom_file: Path = None, repo_dir: Path = None) -> dict:
                             elif isinstance(v, str):
                                 # Direct alias format: alias -> Canonical
                                 mapping[str(k).strip().lower()] = v.strip()
-                print(f"  [+] Loaded user mapping rules from '{p.name}' ({len(mapping)} aliases mapped).")
+                print(f"  [+] Loaded authoritative user mapping rules from '{p.name}' ({len(mapping)} aliases mapped).")
                 break
             except Exception as e:
                 print(f"[-] Warning: Failed to load user mapping from {p}: {e}", file=sys.stderr)
     return mapping
 
-def fetch_github_author_mappings(github_repo: str, token: str = None) -> tuple[dict, dict, dict]:
-    """Discover real GitHub usernames and avatar URLs from repository contributors and commits API.
+def fetch_github_contributors_list(github_repo: str, token: str = None) -> tuple[dict, dict]:
+    """Fetch official GitHub contributors list to build safe, exact case-insensitive login mappings.
     
     Returns:
-        (email_to_login, name_to_login, login_to_avatar_url)
+        (known_logins_map, login_to_avatar_url)
     """
     if not github_repo:
-        return {}, {}, {}
+        return {}, {}
 
-    email_to_login = {}
-    name_to_login = {}
+    known_logins = {}
     login_to_avatar_url = {}
 
     headers = {"User-Agent": "RepoEvolutionVisualizer"}
@@ -129,7 +127,7 @@ def fetch_github_author_mappings(github_repo: str, token: str = None) -> tuple[d
     if auth_token:
         headers["Authorization"] = f"token {auth_token}"
 
-    # 1. Fetch contributors list via gh CLI or REST API
+    # 1. Try gh CLI first
     try:
         gh_cmd = ["gh", "api", f"repos/{github_repo}/contributors", "--paginate", "--jq", ".[] | {login: .login, avatar_url: .avatar_url}"]
         res = subprocess.run(gh_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -142,7 +140,7 @@ def fetch_github_author_mappings(github_repo: str, token: str = None) -> tuple[d
                         login = item.get("login")
                         av = item.get("avatar_url")
                         if login:
-                            name_to_login[login.lower()] = login
+                            known_logins[login.lower()] = login
                             if av:
                                 login_to_avatar_url[login] = av
                     except Exception:
@@ -150,8 +148,8 @@ def fetch_github_author_mappings(github_repo: str, token: str = None) -> tuple[d
     except Exception:
         pass
 
-    # REST fallback for contributors if needed
-    if not name_to_login:
+    # 2. REST API fallback
+    if not known_logins:
         try:
             url = f"https://api.github.com/repos/{github_repo}/contributors?per_page=100"
             req = urllib.request.Request(url, headers=headers)
@@ -162,42 +160,16 @@ def fetch_github_author_mappings(github_repo: str, token: str = None) -> tuple[d
                         login = item.get("login")
                         av = item.get("avatar_url")
                         if login:
-                            name_to_login[login.lower()] = login
+                            known_logins[login.lower()] = login
                             if av:
                                 login_to_avatar_url[login] = av
         except Exception:
             pass
 
-    # 2. Fetch recent commits to map git name/email -> GitHub login
-    try:
-        gh_cmd = ["gh", "api", f"repos/{github_repo}/commits?per_page=100", "--jq", ".[] | {login: .author.login, name: .commit.author.name, email: .commit.author.email, avatar: .author.avatar_url}"]
-        res = subprocess.run(gh_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-        if res.returncode == 0 and res.stdout.strip():
-            for line in res.stdout.split("\n"):
-                line = line.strip()
-                if line:
-                    try:
-                        item = json.loads(line)
-                        login = item.get("login")
-                        name = item.get("name")
-                        email = item.get("email")
-                        avatar = item.get("avatar")
-                        if login:
-                            if avatar:
-                                login_to_avatar_url[login] = avatar
-                            if email:
-                                email_to_login[email.strip().lower()] = login
-                            if name:
-                                name_to_login[name.strip().lower()] = login
-                    except Exception:
-                        pass
-    except Exception:
-        pass
+    if known_logins:
+        print(f"  [+] Discovered {len(known_logins)} official GitHub repository contributors.")
 
-    if name_to_login or email_to_login:
-        print(f"  [+] Discovered {len(login_to_avatar_url)} official GitHub contributors for identity resolution.")
-
-    return email_to_login, name_to_login, login_to_avatar_url
+    return known_logins, login_to_avatar_url
 
 def clean_author_name(name: str) -> str:
     """Normalize raw git author name by stripping machine names and format anomalies."""
@@ -230,16 +202,15 @@ def extract_git_commits(
     repo_dir: Path,
     mailmap: dict,
     user_mapping: dict,
-    gh_email_to_login: dict,
-    gh_name_to_login: dict,
+    known_gh_logins: dict,
     bot_filter: set
-) -> tuple[list, list, dict]:
-    """Extract all git commits with numstat metrics and unified canonical author mapping.
+) -> tuple[list, list, dict, dict]:
+    """Extract all git commits with numstat metrics and safe author deduplication.
     
     Returns:
-        (commits, sorted_contributors, author_primary_email)
+        (commits, sorted_contributors, author_primary_email, unmapped_authors)
     """
-    print("[1/5] Extracting Git commit history with numstat and identity deduplication...")
+    print("[1/5] Extracting Git commit history with numstat and safe identity deduplication...")
     cmd = ["git", "log", "--all", "--reverse", "--numstat", "--format=COMMIT|%H|%at|%an|%ae|%s"]
     try:
         raw_log = subprocess.check_output(
@@ -253,32 +224,38 @@ def extract_git_commits(
     current_commit = None
     contributors_seen = {}
     author_emails = {}
+    unmapped_authors = {}  # canonical_name -> set(emails)
 
-    def resolve_author(raw_name: str, raw_email: str) -> str:
+    def resolve_author(raw_name: str, raw_email: str) -> tuple[str, bool]:
         name_clean = clean_author_name(raw_name)
         name_lower = name_clean.lower()
         email_lower = raw_email.lower()
 
-        # 1. Custom user_mapping.json priority
+        # 1. Custom user_mapping.json priority (Highest Authority)
         if email_lower in user_mapping:
-            return user_mapping[email_lower]
+            return user_mapping[email_lower], True
         if name_lower in user_mapping:
-            return user_mapping[name_lower]
+            return user_mapping[name_lower], True
 
-        # 2. .mailmap priority
+        # 2. .mailmap priority (Standard Git Authority)
         if email_lower in mailmap:
-            return mailmap[email_lower]
+            return mailmap[email_lower], True
         if name_lower in mailmap:
-            return mailmap[name_lower]
+            return mailmap[name_lower], True
 
-        # 3. Discovered GitHub official API login mapping
-        if email_lower in gh_email_to_login:
-            return gh_email_to_login[email_lower]
-        if name_lower in gh_name_to_login:
-            return gh_name_to_login[name_lower]
+        # 3. GitHub Verified No-Reply Email (e.g. 12345+username@users.noreply.github.com)
+        noreply_match = re.search(r"(?:[0-9]+\+)?([^@]+)@users\.noreply\.github\.com", email_lower)
+        if noreply_match:
+            nr_user = noreply_match.group(1)
+            canonical = known_gh_logins.get(nr_user.lower(), nr_user)
+            return canonical, True
 
-        # 4. Cleaned name fallback
-        return name_clean
+        # 4. Exact match against known GitHub contributors (case-insensitive safe mapping)
+        if name_lower in known_gh_logins:
+            return known_gh_logins[name_lower], True
+
+        # 5. Unmapped alias fallback (Safe, no blind guessing)
+        return name_clean, False
 
     for line in raw_log.split("\n"):
         line = line.strip()
@@ -299,7 +276,7 @@ def extract_git_commits(
                 current_commit = None
                 continue
 
-            author = resolve_author(raw_author, raw_email)
+            author, is_mapped = resolve_author(raw_author, raw_email)
             if author.lower() in bot_filter:
                 current_commit = None
                 continue
@@ -307,6 +284,12 @@ def extract_git_commits(
             contributors_seen[author] = contributors_seen.get(author, 0) + 1
             if author not in author_emails and raw_email:
                 author_emails[author] = raw_email
+
+            if not is_mapped:
+                if author not in unmapped_authors:
+                    unmapped_authors[author] = set()
+                if raw_email:
+                    unmapped_authors[author].add(raw_email)
 
             current_commit = {
                 "hash": chash,
@@ -335,8 +318,8 @@ def extract_git_commits(
     sorted_contributors = [
         k for k, _ in sorted(contributors_seen.items(), key=lambda x: x[1], reverse=True)
     ]
-    print(f"  [+] Extracted {len(commits)} commits from {len(sorted_contributors)} unique contributors (after alias deduplication).")
-    return commits, sorted_contributors, author_emails
+    print(f"  [+] Extracted {len(commits)} commits from {len(sorted_contributors)} unique contributors.")
+    return commits, sorted_contributors, author_emails, unmapped_authors
 
 def fetch_github_stars(github_repo: str, token: str = None) -> list:
     """Fetch GitHub stargazers timestamps via gh CLI or GitHub REST API."""
@@ -619,7 +602,7 @@ def main():
     github_repo = args.github_repo or get_git_remote_repo(repo_dir)
     mailmap = parse_mailmap(repo_dir)
     user_mapping = parse_user_mapping(Path(args.user_mapping) if args.user_mapping else None, repo_dir)
-    gh_email_to_login, gh_name_to_login, login_to_avatar_url = fetch_github_author_mappings(github_repo, args.token)
+    known_gh_logins, login_to_avatar_url = fetch_github_contributors_list(github_repo, args.token)
 
     # Auto-detect title from README.md if not explicitly specified
     project_title = args.project_title
@@ -644,9 +627,29 @@ def main():
     if not project_title:
         project_title = repo_dir.name
 
-    commits, contributors, author_emails = extract_git_commits(
-        repo_dir, mailmap, user_mapping, gh_email_to_login, gh_name_to_login, DEFAULT_BOTS
+    commits, contributors, author_emails, unmapped_authors = extract_git_commits(
+        repo_dir, mailmap, user_mapping, known_gh_logins, DEFAULT_BOTS
     )
+
+    # Diagnostics & Suggested user_mapping.json generation
+    if unmapped_authors:
+        print(f"\n[!] 💡 Contributor Identity Notice: Detected {len(unmapped_authors)} author alias(es) not mapped to official GitHub handles:")
+        suggested_mapping = {}
+        for author_name, emails in list(unmapped_authors.items())[:15]:
+            email_list = list(emails)
+            preview = f" (email: {email_list[0]})" if email_list else ""
+            print(f"    - '{author_name}'{preview}")
+            suggested_mapping[author_name] = [author_name] + email_list
+
+        suggested_path = out_dir / "user_mapping.suggested.json"
+        try:
+            with open(suggested_path, "w", encoding="utf-8") as f:
+                json.dump(suggested_mapping, f, ensure_ascii=False, indent=2)
+            print(f"    -> Generated starter template at: {suggested_path}")
+            print("    -> Tip: To unify aliases and fetch real GitHub avatars, configure 'user_mapping.json' in your repository!\n")
+        except Exception:
+            pass
+
     stars = fetch_github_stars(github_repo, args.token)
     milestones = extract_git_milestones(
         repo_dir, commits, Path(args.milestones_file) if args.milestones_file else None
