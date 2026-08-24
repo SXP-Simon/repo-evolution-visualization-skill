@@ -1,6 +1,6 @@
-# repo-evolution-visualizer
+# repo-evolution-visualization-skill
 
-> 🎨 **面向 AI 编码智能体（Antigravity、Codex、Cursor、Claude Code 等）与开发者的全自动 Git 仓库演进、Star 历史与贡献者手绘动态可视化套件。**
+> 🎨 **面向 AI 编码智能体（Antigravity、Codex、Cursor、Claude Code 等）与开发者的全自动 Git 仓库演进、Star 历史与贡献者手绘动态可视化 Skill。**
 
 将任意 Git 仓库历史、GitHub Star 增长曲线、贡献者星环与里程碑，生成高度复用、纯手绘涂鸦风（Hand-Drawn Doodle）的交互式 Web 演化看板与 60FPS 极清展示视频。
 
@@ -169,7 +169,7 @@ graph TD
 ## 📂 仓库目录结构
 
 ```text
-repo-evolution-visualizer/
+repo-evolution-visualization-skill/
 ├── README.md                      # 仓库综合介绍与使用指南
 ├── LICENSE                        # MIT 开源许可证
 ├── .gitignore                     # Git 忽略配置
