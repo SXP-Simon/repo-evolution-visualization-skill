@@ -45,7 +45,9 @@ def main():
     parser.add_argument("--github-repo", type=str, default="", help="GitHub owner/repo (optional).")
     parser.add_argument("--output-dir", type=str, default="output_visualizer", help="Output directory.")
     parser.add_argument("--speed", type=float, default=3.0, help="Simulation playback speed multiplier (default: 3x).")
-    parser.add_argument("--output-mp4", type=str, default="", help="Final MP4 output file path.")
+    parser.add_argument("--project-title", type=str, default="", help="Custom project title.")
+    parser.add_argument("--core-label", type=str, default="核心代码", help="Center hub core badge label.")
+    parser.add_argument("--modules-file", type=str, default="", help="Custom architecture modules JSON file.")
     parser.add_argument("--milestones-file", type=str, default="", help="Path to custom curated milestones JSON.")
     parser.add_argument("--token", type=str, default="", help="GitHub Access Token.")
     args = parser.parse_args()
@@ -78,6 +80,12 @@ def main():
     ]
     if args.github_repo:
         extract_cmd.extend(["--github-repo", args.github_repo])
+    if args.project_title:
+        extract_cmd.extend(["--project-title", args.project_title])
+    if args.core_label:
+        extract_cmd.extend(["--core-label", args.core_label])
+    if args.modules_file:
+        extract_cmd.extend(["--modules-file", args.modules_file])
     if args.milestones_file:
         extract_cmd.extend(["--milestones-file", args.milestones_file])
     if args.token:

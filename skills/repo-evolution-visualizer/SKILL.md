@@ -54,31 +54,43 @@ Before extracting data, verify the environment and credentials:
 
 ---
 
-## 🚀 Execution Workflow
+## 🚀 AI Agent Execution Workflow (Step-by-Step)
 
-### Step 1: Run Data Extractor
+When this skill is activated, you (the AI Agent) should autonomously execute the following 4 phases:
 
-Execute the universal data extraction script:
+### Phase 1: Project Discovery & Title Formulation (自主感知与标题拟定)
+
+1. **Inspect Repository Context**:
+   - Read the target repository's `README.md`, manifest (`pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`, etc.), and git remote (`git remote get-url origin`).
+   - Understand the project's purpose, core technical highlights, and anniversary/historical context.
+2. **Formulate a Compelling Title**:
+   - Synthesize a catchy, emotionally resonant, and accurate title for the visualizer (e.g., `从零开始的群分析总结插件（一周年）`, `AstrBot 智能机器人演化志`, `Vue.js 渐进式前端生态十年图鉴`).
+   - Determine the central core hub badge text (default: `核心代码` or `项目内核`).
+
+### Phase 2: Milestone Curation & Emotional Copywriting (自主提炼自然中文里程碑)
+
+1. **Extract Key Project Events**:
+   - Run `git tag -l --sort=creatordate` to find all release tags.
+   - Run `git log --oneline --grep="feat\|release\|PR\|#"` to spot major features and contributor PR merges.
+2. **Synthesize Plain-Language Milestones**:
+   - Write 15~30 genuine, natural, plain-language milestones into `<OUTPUT_DIR>/milestones.json`.
+   - Include contributor shoutouts (`由 @username 贡献...`), PR references (`#123`), and categorized tags (`项目诞生`, `重磅功能`, `社区里程碑`, `生态拓展`, `周年纪念`).
+   - *Reference*: Follow [Milestone Curation Rules](./references/milestone_curation_rules.md).
+
+### Phase 3: Data Extraction & Visualizer Deployment (数据提取与模板装配)
+
+Execute the extraction and template deployment:
 
 ```bash
 python skills/repo-evolution-visualizer/scripts/extract_repo_data.py \
   --repo-path "<PATH_TO_TARGET_REPO>" \
   --github-repo "<OWNER/REPO>" \
+  --project-title "<AUTONOMOUSLY_FORMULATED_TITLE>" \
+  --milestones-file "<OUTPUT_DIR>/milestones.json" \
   --output-dir "<OUTPUT_DIR>"
 ```
 
-**What this script does**:
-- Parses Git commit log with `numstat` file additions/deletions.
-- Merges author identities via `.mailmap` and filters out known bots.
-- Fetches Star history with timestamps via `gh api` or GitHub REST API.
-- Caches contributor avatars and repository logo as 100% inlined Base64 Data URIs (origin-clean).
-- Extracts release tags and compiles initial milestones.
-- Writes structured data to `<OUTPUT_DIR>/visualizer_data.js`.
-
-### Step 2: Deploy Visualizer Template
-
-Copy the generalized template into the output folder:
-
+Deploy the HTML template:
 ```bash
 python -c "
 import shutil
@@ -90,52 +102,32 @@ print(f'Visualizer HTML deployed to {target}')
 "
 ```
 
-### Step 3: (Optional) Curate Plain-Language Milestones & Modules
+### Phase 4: Verification & Delivery (两种交付模式)
 
-- If the repository has special domain modules, adjust `mapFileToModule()` according to [Module Classification Guide](./references/module_classification_guide.md).
-- To enrich the story with community moments and memorable achievements, provide a custom `milestones.json` following [Milestone Curation Rules](./references/milestone_curation_rules.md).
-
-### Step 4: Launch and Test in Browser
-
-Open `<OUTPUT_DIR>/index.html` in the default browser:
-
+#### Mode A: Interactive Web Dashboard (浏览器交互看板)
+Launch the visualizer in the default browser:
 ```bash
 start "" "<OUTPUT_DIR>/index.html"
 ```
-
 Verify:
-- [ ] Central repository logo badge displays crisply without dashed lines overlapping the logo.
-- [ ] Outer contributor ring rotates continuously at 360°.
-- [ ] Active developers swoop in on commit and return smoothly to their slots.
-- [ ] Multi-file micro-tags appear over pulsing files during commits.
-- [ ] Left Star chart curve and milestone feed stream in chronological sync with commits.
-- [ ] Right contributor leaderboard tracks additions and sprint badges dynamically.
+- [ ] Brand title and repository name in header match project information dynamically.
+- [ ] Central repository logo badge (from GitHub owner avatar or local logo) displays crisply.
+- [ ] 360° celestial contributor ring rotates continuously and developers swoop on commit.
+- [ ] Milestones and Star curve update in chronological sync with commits.
+- [ ] Clicking **【录制整页视频】** records full-page 25Mbps 60FPS video.
 
-### Step 5: Full-Page Ultra-HD Recording & MP4 Export (Interactive)
-
-1. In the top navbar, click **【录制整页视频】**.
-2. Select the current browser tab in the popup dialog.
-3. The visualizer automatically resets to day 1 (0%) and records the entire webpage in 25Mbps 60FPS.
-4. When finished, click **【● 停止录制】** to download `astrbot_plugin_fullpage_evolution_*.webm`.
-5. Run `skills/repo-evolution-visualizer/scripts/convert_to_mp4.bat` to convert the downloaded `.webm` to publication-ready H.264 MP4 with CRF 14 clarity!
-
-### Step 6: Fully Automated Headless MP4 Generation (AI-Driven)
-
-When the user asks you (the AI agent) to directly produce an MP4 video file without manual screen-recording interactions, run the end-to-end automated pipeline script:
-
+#### Mode B: Fully Automated Headless MP4 Export (全自动静默导出 MP4)
+If the user requests a ready-to-share MP4 video directly, run:
 ```bash
 python skills/repo-evolution-visualizer/scripts/record_and_export_mp4.py \
   --repo-path "<PATH_TO_TARGET_REPO>" \
   --github-repo "<OWNER/REPO>" \
+  --project-title "<AUTONOMOUSLY_FORMULATED_TITLE>" \
+  --milestones-file "<OUTPUT_DIR>/milestones.json" \
   --speed 3.0 \
   --output-mp4 "<DESTINATION_PATH.mp4>"
 ```
-
-This script will:
-1. Extract all Git, Star, and Contributor data.
-2. Launch a background browser with `?autorecord=1`.
-3. Capture the full animation.
-4. Automatically invoke FFmpeg to convert the `.webm` to an ultra-crisp H.264 MP4 video.
+This automatically captures the WebM stream and converts it via FFmpeg (CRF 14, H.264) into the final `.mp4` video.
 
 ---
 

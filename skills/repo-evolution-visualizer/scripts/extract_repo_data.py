@@ -341,6 +341,9 @@ def main():
     parser.add_argument("--repo-path", type=str, default=".", help="Path to local git repository.")
     parser.add_argument("--github-repo", type=str, default="", help="GitHub owner/repo (e.g. SXP-Simon/AstrBot).")
     parser.add_argument("--output-dir", type=str, default="web_visualizer", help="Output directory.")
+    parser.add_argument("--project-title", type=str, default="", help="Custom project title (e.g. 'AstrBot 智能机器人演化史').")
+    parser.add_argument("--core-label", type=str, default="核心代码", help="Center hub core badge label.")
+    parser.add_argument("--modules-file", type=str, default="", help="Custom architecture modules JSON file.")
     parser.add_argument("--milestones-file", type=str, default="", help="Path to custom curated milestones JSON file.")
     parser.add_argument("--token", type=str, default="", help="GitHub Personal Access Token for rate limits.")
     args = parser.parse_args()
@@ -357,6 +360,30 @@ def main():
     github_repo = args.github_repo or get_git_remote_repo(repo_dir)
     mailmap = parse_mailmap(repo_dir)
 
+    # Auto-detect title from README.md if not explicitly specified
+    project_title = args.project_title
+    if not project_title:
+        readme_candidates = [repo_dir / "README.md", repo_dir / "readme.md", repo_dir / "README.zh-CN.md", repo_dir / "README.zh.md"]
+        for rm in readme_candidates:
+            if rm.exists():
+                try:
+                    for line in rm.read_text(encoding="utf-8", errors="ignore").split("\n"):
+                        line = line.strip()
+                        if line.startswith("# "):
+                            # Extract clean title without badges or emojis
+                            clean_t = re.sub(r"[#\*\!\[\]\(\)]", "", line).strip()
+                            clean_t = re.sub(r"^\s*[:\-\_]+\s*", "", clean_t)
+                            if clean_t:
+                                project_title = clean_t
+                                print(f"  [+] Auto-detected project title from README: '{project_title}'")
+                                break
+                    if project_title:
+                        break
+                except Exception:
+                    pass
+    if not project_title:
+        project_title = repo_dir.name
+
     commits, contributors = extract_git_commits(repo_dir, mailmap, DEFAULT_BOTS)
     stars = fetch_github_stars(github_repo, args.token)
     milestones = extract_git_milestones(
@@ -366,6 +393,16 @@ def main():
     avatar_cache_dir = out_dir / "avatars_cache"
     avatars_b64 = fetch_contributor_avatars(contributors, avatar_cache_dir)
     logo_b64 = find_and_encode_logo(repo_dir, github_repo, avatar_cache_dir, args.token)
+
+    # Custom modules if provided
+    modules_data = None
+    if args.modules_file and Path(args.modules_file).exists():
+        try:
+            with open(args.modules_file, "r", encoding="utf-8") as f:
+                modules_data = json.load(f)
+                print(f"  [+] Loaded custom architecture modules from {args.modules_file}")
+        except Exception as e:
+            print(f"  [-] Failed to load modules file: {e}", file=sys.stderr)
 
     # Date range string
     date_range = "Evolution Timeline"
@@ -377,7 +414,8 @@ def main():
 
     dataset = {
         "project": {
-            "name": repo_dir.name,
+            "name": project_title,
+            "coreLabel": args.core_label,
             "repo": github_repo or repo_dir.name,
             "dateRange": date_range,
             "totalCommits": len(commits),
@@ -391,6 +429,8 @@ def main():
         "stars": stars,
         "commits": commits
     }
+    if modules_data:
+        dataset["modules"] = modules_data
 
     print("[5/5] Writing bundle to visualizer_data.js...")
     with open(data_js_path, "w", encoding="utf-8") as f:

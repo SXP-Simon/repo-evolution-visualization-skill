@@ -15,6 +15,9 @@ def main():
     parser.add_argument("--repo-path", type=str, default=".", help="Target Git repository path.")
     parser.add_argument("--github-repo", type=str, default="", help="GitHub owner/repo (optional).")
     parser.add_argument("--output-dir", type=str, default="web_visualizer", help="Output directory.")
+    parser.add_argument("--project-title", type=str, default="", help="Custom project title.")
+    parser.add_argument("--core-label", type=str, default="核心代码", help="Center hub badge text.")
+    parser.add_argument("--modules-file", type=str, default="", help="Custom architecture modules JSON.")
     parser.add_argument("--milestones-file", type=str, default="", help="Custom milestones JSON file.")
     args = parser.parse_args()
 
@@ -40,6 +43,12 @@ def main():
     ]
     if args.github_repo:
         cmd.extend(["--github-repo", args.github_repo])
+    if args.project_title:
+        cmd.extend(["--project-title", args.project_title])
+    if args.core_label:
+        cmd.extend(["--core-label", args.core_label])
+    if args.modules_file:
+        cmd.extend(["--modules-file", args.modules_file])
     if args.milestones_file:
         cmd.extend(["--milestones-file", args.milestones_file])
 
