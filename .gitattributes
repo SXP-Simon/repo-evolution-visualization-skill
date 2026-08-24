@@ -1,0 +1,39 @@
+# Git Attributes Configuration for gh-skill
+# Standardizing line endings and defining release archive export rules
+
+# ==============================================================================
+# 1. Release Archive Filters (git archive / GitHub Release zipball)
+# ==============================================================================
+.github/            export-ignore
+.gitattributes      export-ignore
+.gitignore          export-ignore
+assets/*.mp4        export-ignore
+assets/*.webm       export-ignore
+output/             export-ignore
+output_*/           export-ignore
+web_visualizer/     export-ignore
+
+# ==============================================================================
+# 2. Line Ending Normalization (Cross-platform compatibility)
+# ==============================================================================
+*                   text=auto
+*.py                text eol=lf
+*.sh                text eol=lf
+*.bat               text eol=crlf
+*.md                text
+*.html              text
+*.js                text
+*.json              text
+*.yml               text eol=lf
+*.yaml              text eol=lf
+
+# ==============================================================================
+# 3. Binary Asset Handling
+# ==============================================================================
+*.png               binary
+*.jpg               binary
+*.jpeg              binary
+*.gif               binary
+*.ico               binary
+*.mp4               binary
+*.webm              binary

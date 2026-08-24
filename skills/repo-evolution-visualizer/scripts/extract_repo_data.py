@@ -28,6 +28,20 @@ DEFAULT_BOTS = {
     "imgbot[bot]", "codecov[bot]", "sourcery-ai[bot]", "vercel[bot]"
 }
 
+def check_environment_health() -> None:
+    """Check availability of optional toolchain and print friendly setup hints."""
+    has_git = shutil.which("git") is not None
+    has_gh = shutil.which("gh") is not None
+
+    if not has_git:
+        print("[-] Error: 'git' is not found in system PATH.", file=sys.stderr)
+        print("    -> Install Git: winget install --id Git.Git (Windows) | brew install git (macOS) | apt install git (Linux)", file=sys.stderr)
+
+    if not has_gh and not os.environ.get("GITHUB_TOKEN") and not os.environ.get("GH_TOKEN"):
+        print("[*] Note: GitHub CLI ('gh') or GITHUB_TOKEN not detected.", file=sys.stderr)
+        print("    -> For live Star curves and higher rate limits, run 'gh auth login' or install: winget install GitHub.cli (Windows) | brew install gh (macOS)")
+        print("    -> (Offline fallback: A smooth simulated growth curve will be generated automatically if unauthenticated)\n", file=sys.stderr)
+
 def parse_mailmap(repo_dir: Path) -> dict:
     """Parse .mailmap file if present to resolve contributor identities."""
     mailmap = {}
@@ -347,6 +361,8 @@ def main():
     parser.add_argument("--milestones-file", type=str, default="", help="Path to custom curated milestones JSON file.")
     parser.add_argument("--token", type=str, default="", help="GitHub Personal Access Token for rate limits.")
     args = parser.parse_args()
+
+    check_environment_health()
 
     repo_dir = Path(args.repo_path).resolve()
     if not (repo_dir / ".git").exists():

@@ -160,8 +160,20 @@ def main():
     print(f"  [+] Captured WebM recording: {downloaded_webm} ({downloaded_webm.stat().st_size / 1024:.1f} KB)")
 
     # Step 4: Convert to H.264 MP4 with FFmpeg
+    ffmpeg_exe = shutil.which("ffmpeg")
+    if not ffmpeg_exe:
+        print()
+        print("==============================================================================")
+        print("[-] Notice: FFmpeg was not found in your system PATH.")
+        print(f"    -> WebM recording captured successfully at: {downloaded_webm}")
+        print("    -> To enable automated MP4 conversion, please install FFmpeg:")
+        print("       - Windows: winget install --id Gyan.FFmpeg -e")
+        print("       - macOS:   brew install ffmpeg")
+        print("       - Linux:   sudo apt install ffmpeg")
+        print("==============================================================================")
+        return
+
     print("[4/4] Converting WebM to ultra-clear H.264 MP4 (CRF 14, 60FPS)...")
-    ffmpeg_exe = shutil.which("ffmpeg") or "ffmpeg"
     ffmpeg_cmd = [
         ffmpeg_exe, "-y",
         "-i", str(downloaded_webm),

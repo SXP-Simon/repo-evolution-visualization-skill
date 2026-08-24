@@ -12,6 +12,18 @@
 
 ---
 
+## 🎬 效果演示 (Live Demo Showcase)
+
+<p align="center">
+  <img src="assets/demo_animation.gif" alt="Repository Evolution Visualizer Animated Demo" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);" />
+</p>
+
+> 💡 **动态演进演示**：上方为实况动态预览（自动循环播放）。
+> 
+> 📦 **高清原片与发行包下载**：为保持 Git 仓库极致轻量（快速 Clone），完整 60FPS 极清演示视频及独立打包的 Skill 压缩包推荐直接前往 [**GitHub Releases 发行页面**](../../releases) 下载！
+
+---
+
 ## 🎨 `repo-evolution-visualizer` 核心特色
 
 这是一个专为开源项目一周年庆典、年度总结、社区答谢以及技术演进汇报打造的自动化可视化套件。
@@ -46,6 +58,18 @@
 - **整页 UI 完整录制**：通过浏览器原生 `getDisplayMedia` 捕获完整导航栏、趋势图、里程碑流与排行榜；
 - **一键开播与自动下载**：点击录制自动从 Day 1 重置并播放，停止后自动下载超清录像；
 - **一键无损转码**：配备 `convert_to_mp4.bat`，1 秒调用 FFmpeg 输出 CRF 14（视觉无损）标准 H.264 MP4 视频！
+
+## 🛠️ 前置工具链与轻量化依赖
+
+本 Skill 遵循 **极简与轻量化设计**，数据提取与 HTML 渲染 **0 第三方 pip 依赖**（仅使用 Python 3.10+ 标准库）：
+
+| 工具 | 角色 | 必需度 | 重量 | 缺失时 1 行安装命令 |
+| :--- | :--- | :---: | :---: | :--- |
+| **`Python 3.10+`** | 数据提取与运行环境 | **必需** | 超轻 | 仅标准库（**无需 `pip install` 任何包**） |
+| **`Git`** | 读取代码提交与作者历史 | **必需** | 超轻 | **Win**: `winget install --id Git.Git -e`<br>**Mac**: `brew install git`<br>**Linux**: `sudo apt install git` |
+| **现代浏览器** | 渲染 Canvas 看板与录制视频 | **Yes** | 原生 | Windows/macOS/Linux 自带 Chrome / Edge / Firefox |
+| **`GitHub CLI (gh)`** | 获取精确 Star 曲线与高频 API | *可选* | 轻量 | **Win**: `winget install --id GitHub.cli -e`<br>**Mac**: `brew install gh`<br>*(若不装可配置 `GITHUB_TOKEN` 或自动平滑模拟曲线)* |
+| **`FFmpeg`** | 将 WebM 录屏直接转为 MP4 | *可选* | 轻量 | **Win**: `winget install --id Gyan.FFmpeg -e`<br>**Mac**: `brew install ffmpeg`<br>**Linux**: `sudo apt install ffmpeg`<br>*(若不装，网页依然可直接下载 WebM 高清视频)* |
 
 ---
 
@@ -90,8 +114,9 @@ export GITHUB_TOKEN="ghp_your_token_here"
 
 ### 1. 将 Skill 载入你的 AI 助手环境
 
-- **Antigravity**：将本仓库克隆或复制到项目根目录的 `.agents/skills/` 或全局 `~/.gemini/config/skills/`；
-- **Codex / Cursor / Claude**：复制 `skills/repo-evolution-visualizer` 到你的 skills 目录即可。
+- **直接下载发行包（推荐）**：前往 [**GitHub Releases**](../../releases) 下载最新的 `repo-evolution-visualizer-v*.zip`，解压到你的 skills 目录即可（开箱即用，无需 Clone 整个 Git 仓库）；
+- **Git Clone 方式**：将本仓库克隆到项目根目录的 `.agents/skills/` 或全局 `~/.gemini/config/skills/`；
+- **Codex / Cursor / Claude**：复制 `skills/repo-evolution-visualizer` 文件夹至对应技能目录。
 
 ### 2. 在 AI 对话中直接调用（两种模式）
 

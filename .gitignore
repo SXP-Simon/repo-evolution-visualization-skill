@@ -26,6 +26,8 @@ ENV/
 
 # Visualizer Generated Data & Video Dumps
 output/
+output_*/
+web_visualizer/
 *.webm
 *.mp4
 *.log

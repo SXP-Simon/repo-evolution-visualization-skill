@@ -40,17 +40,20 @@ It generates a standalone, zero-dependency HTML5 application that visualizes cod
 
 ---
 
-## 📋 Prerequisites & Permission Verification
+## 📋 Prerequisites & Toolchain Verification (环境自检与依赖矩阵)
 
-Before extracting data, verify the environment and credentials:
+This skill is designed to be **ultra-lightweight with zero heavy dependencies**. Python standard library is used for data extraction (0 pip packages required).
 
-1. **Git Repository**: Ensure the target directory contains a valid `.git` history.
-2. **GitHub CLI / Access Token** (for Star history and avatars):
-   - Check GitHub CLI: `gh auth status`
-   - Or verify `GITHUB_TOKEN` in environment: `echo $env:GITHUB_TOKEN`
-   - *Reference*: Read [Permissions & Tokens Guide](./references/permissions_and_tokens.md) for details on scope and rate limits.
-3. **Python 3.10+**: Requires standard library + `urllib`.
-4. **FFmpeg** (optional, for MP4 conversion): `ffmpeg -version`.
+| Tool | Role | Required? | Weight | 1-Line Install Command (If Missing) |
+| :--- | :--- | :---: | :---: | :--- |
+| **`Python 3.10+`** | Data extractor & script runner | **Yes** | Light | Standard library only (**0 pip packages needed**) |
+| **`Git`** | Read commit logs & `.mailmap` | **Yes** | Light | **Win**: `winget install --id Git.Git -e`<br>**Mac**: `brew install git`<br>**Linux**: `sudo apt install git` |
+| **Modern Browser** | Render Canvas & record video | **Yes** | Built-in | System Chrome / Edge / Firefox |
+| **`GitHub CLI (gh)`** | Fetch live Star history & timestamps | *Optional* | Light | **Win**: `winget install --id GitHub.cli -e`<br>**Mac**: `brew install gh`<br>*(Or set `GITHUB_TOKEN` / fallback to smooth curve)* |
+| **`FFmpeg`** | Lossless WebM to H.264 MP4 conversion | *Optional* | Light | **Win**: `winget install --id Gyan.FFmpeg -e`<br>**Mac**: `brew install ffmpeg`<br>**Linux**: `sudo apt install ffmpeg`<br>*(If absent, WebM is downloaded directly)* |
+
+> [!TIP]
+> If any optional tool is missing, the AI Agent can either run the 1-line install command above or proceed with built-in fallbacks (e.g. smooth simulated Star curves, direct WebM downloads).
 
 ---
 
