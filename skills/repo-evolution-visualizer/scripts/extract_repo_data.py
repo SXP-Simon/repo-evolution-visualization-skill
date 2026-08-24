@@ -301,7 +301,17 @@ def fetch_contributor_avatars(contributors: list, cache_dir: Path) -> dict:
             except Exception:
                 pass
 
-        if avatar_path.exists():
+        if not avatar_path.exists() or avatar_path.stat().st_size == 0:
+            # Generate fallback hand-drawn letter badge SVG
+            initial = (name[:2] if len(name) >= 2 else name).upper()
+            colors = ["#4ecdc4", "#ff6b6b", "#ffd93d", "#6c5ce7", "#a8e6cf", "#ff8b94"]
+            bg = colors[sum(ord(c) for c in name) % len(colors)]
+            svg_content = f'''<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <circle cx="60" cy="60" r="56" fill="{bg}" stroke="#2c2c2c" stroke-width="4" stroke-dasharray="4,4"/>
+  <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="42" font-weight="900" fill="#2c2c2c">{initial}</text>
+</svg>'''
+            avatars_b64[name] = "data:image/svg+xml;base64," + base64.b64encode(svg_content.encode("utf-8")).decode("ascii")
+        else:
             data = avatar_path.read_bytes()
             avatars_b64[name] = "data:image/png;base64," + base64.b64encode(data).decode("ascii")
 

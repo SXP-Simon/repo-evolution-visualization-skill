@@ -1278,34 +1278,73 @@
     }
 
     // -------------------------------------------------------------
-    // ECharts Star History (Hand-Drawn Doodle Palette & Dashed Lines)
+    // ECharts Growth Chart (Stars or Cumulative Commits Fallback)
     // -------------------------------------------------------------
     let echartInstance = null;
     let allStarDataPoints = [];
-
-    const ALL_STAR_MILESTONES = [
-      { name: "25 Stars", value: 25, coord: ['2025-09-24', 25] },
-      { name: "100 Stars", value: 100, coord: ['2025-12-29', 100] },
-      { name: "200 Stars", value: 200, coord: ['2026-03-13', 200] },
-      { name: "300 Stars", value: 300, coord: ['2026-04-18', 300] },
-      { name: "400 Stars", value: 400, coord: ['2026-07-07', 400] },
-      { name: "462 Stars", value: 462, coord: ['2026-08-24', 462] }
-    ];
+    let isStarMode = true;
+    let maxMetricCount = 0;
+    let ALL_STAR_MILESTONES = [];
 
     function initECharts() {
       const dom = document.getElementById("echarts-star-box");
       if (!dom) return;
       echartInstance = echarts.init(dom, null, { renderer: "canvas" });
 
-      allStarDataPoints = data.stars.map(s => {
-        const dt = new Date(s.timestamp * 1000);
-        return [
-          `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`,
-          s.count,
-          s.user,
-          s.timestamp
-        ];
-      });
+      // Determine whether we have valid stars or fallback to Cumulative Commits
+      const hasStars = data && data.stars && Array.isArray(data.stars) && data.stars.length > 0;
+      isStarMode = hasStars;
+
+      const startDateObj = new Date(startSimTime * 1000);
+      const endDateObj = new Date(endSimTime * 1000);
+      const startStr = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth()+1).padStart(2,'0')}-${String(startDateObj.getDate()).padStart(2,'0')}`;
+      const endStr = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth()+1).padStart(2,'0')}-${String(endDateObj.getDate()).padStart(2,'0')}`;
+
+      if (hasStars) {
+        allStarDataPoints = data.stars.map(s => {
+          const dt = new Date(s.timestamp * 1000);
+          return [
+            `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`,
+            s.count,
+            s.user || "stargazer",
+            s.timestamp
+          ];
+        });
+        maxMetricCount = allStarDataPoints.length > 0 ? allStarDataPoints[allStarDataPoints.length - 1][1] : 0;
+      } else {
+        // Dynamic Fallback: Generate Cumulative Commits curve
+        let cum = 0;
+        allStarDataPoints = (data.commits || []).map((c, i) => {
+          cum++;
+          const dt = new Date(c.timestamp * 1000);
+          return [
+            `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`,
+            cum,
+            c.author || "developer",
+            c.timestamp
+          ];
+        });
+        maxMetricCount = allStarDataPoints.length;
+        const btnToggle = document.getElementById("btn-toggle-echarts");
+        if (btnToggle) btnToggle.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg> 提交趋势图';
+      }
+
+      // Dynamically calculate milestones for the curve
+      ALL_STAR_MILESTONES = [];
+      if (maxMetricCount > 0) {
+        const steps = [0.1, 0.25, 0.5, 0.75, 1.0];
+        steps.forEach(ratio => {
+          const val = Math.max(1, Math.round(maxMetricCount * ratio));
+          const pt = allStarDataPoints.find(p => p[1] >= val);
+          if (pt && !ALL_STAR_MILESTONES.some(m => m.value === val)) {
+            ALL_STAR_MILESTONES.push({
+              name: `${val} ${isStarMode ? '⭐' : 'Commits'}`,
+              value: val,
+              coord: [pt[0], val]
+            });
+          }
+        });
+      }
 
       const option = {
         grid: { left: 45, right: 30, top: 30, bottom: 25 },
@@ -1315,25 +1354,25 @@
           formatter: params => {
             if (!params || !params[0]) return "";
             const p = params[0];
-            return `📅 ${p.data[0]}<br/>⭐ 累计 Stars: <strong>${p.data[1]}</strong><br/>👤 Stargazer: @${p.data[2] || 'community'}`;
+            return `📅 ${p.data[0]}<br/>${isStarMode ? '⭐ 累计 Stars' : '📦 累计 Commits'}: <strong>${p.data[1]}</strong><br/>👤 @${p.data[2] || 'contributor'}`;
           }
         },
         xAxis: {
           type: "time",
-          min: '2025-08-24',
-          max: '2026-08-24',
+          min: startStr,
+          max: endStr,
           axisLine: { lineStyle: { color: "#2c2c2c", type: "dashed", width: 1.5 } },
           axisLabel: { color: "#2c2c2c", fontSize: 10, fontWeight: "bold" }
         },
         yAxis: {
           type: "value",
           min: 0,
-          max: 462,
+          max: Math.max(5, Math.ceil(maxMetricCount * 1.08)),
           splitLine: { lineStyle: { color: "#e9e7db", type: "dashed" } },
           axisLabel: { color: "#2c2c2c", fontSize: 10, fontWeight: "bold" }
         },
         series: [{
-          name: "GitHub Stars",
+          name: isStarMode ? "GitHub Stars" : "Cumulative Commits",
           type: "line",
           smooth: 0.3,
           showSymbol: false,
@@ -1355,7 +1394,7 @@
             label: {
               show: true,
               position: 'insideEndTop',
-              formatter: '{c} ⭐',
+              formatter: isStarMode ? '{c} ⭐' : '{c} 提交',
               fontSize: 10,
               fontWeight: 'bold',
               color: '#2c2c2c'
@@ -1384,17 +1423,25 @@
       lastEChartsUpdate = now;
 
       const visiblePoints = allStarDataPoints.filter(p => p[3] <= currentSimTime);
-      const currentStarCount = visiblePoints.length > 0 ? visiblePoints[visiblePoints.length - 1][1] : 0;
-      starDisplay.textContent = `${currentStarCount} Stars`;
-      if (drawerStarBadge) {
-        drawerStarBadge.textContent = `${currentStarCount} / 462 ⭐`;
+      const currentMetricCount = visiblePoints.length > 0 ? visiblePoints[visiblePoints.length - 1][1] : 0;
+      
+      if (isStarMode) {
+        starDisplay.textContent = `${currentMetricCount} Stars`;
+        if (drawerStarBadge) {
+          drawerStarBadge.textContent = `${currentMetricCount} / ${maxMetricCount} ⭐`;
+        }
+      } else {
+        starDisplay.textContent = `${currentMetricCount} 提交`;
+        if (drawerStarBadge) {
+          drawerStarBadge.textContent = `${currentMetricCount} / ${maxMetricCount} 提交`;
+        }
       }
 
-      const activeMilestones = ALL_STAR_MILESTONES.filter(m => currentStarCount >= m.value);
+      const activeMilestones = ALL_STAR_MILESTONES.filter(m => currentMetricCount >= m.value);
 
-      const markLineData = currentStarCount > 0 ? [{
-        yAxis: currentStarCount,
-        value: currentStarCount
+      const markLineData = currentMetricCount > 0 ? [{
+        yAxis: currentMetricCount,
+        value: currentMetricCount
       }] : [];
 
       echartInstance.setOption({
