@@ -1491,8 +1491,8 @@
 
         if (c.files && Array.isArray(c.files) && c.files.length > 0) {
           for (const f of c.files) {
-            const adds = Number(f.additions) || 0;
-            const dels = Number(f.deletions) || 0;
+            const adds = Number(f.added ?? f.additions) || 0;
+            const dels = Number(f.deleted ?? f.deletions) || 0;
             commitAdded += adds;
             commitDeleted += dels;
             const mod = mapFileToModule(f.path);
@@ -1993,8 +1993,8 @@
         let commitDeleted = 0;
         if (c.files && Array.isArray(c.files) && c.files.length > 0) {
           for (const f of c.files) {
-            const adds = Number(f.additions) || 0;
-            const dels = Number(f.deletions) || 0;
+            const adds = Number(f.added ?? f.additions) || 0;
+            const dels = Number(f.deleted ?? f.deletions) || 0;
             commitAdded += adds;
             commitDeleted += dels;
             const mod = mapFileToModule(f.path);
