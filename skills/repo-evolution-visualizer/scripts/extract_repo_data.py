@@ -22,9 +22,9 @@ import urllib.error
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(line_buffering=True)
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
 if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
 
 DEFAULT_BOTS = {
     "dependabot[bot]", "github-actions[bot]", "codex", "anthropic-code-agent[bot]",
@@ -211,7 +211,11 @@ def extract_git_commits(
         (commits, sorted_contributors, author_primary_email, unmapped_authors)
     """
     print("[1/5] Extracting Git commit history with numstat and safe identity deduplication...")
-    cmd = ["git", "log", "--all", "--reverse", "--numstat", "--format=COMMIT|%H|%at|%an|%ae|%s"]
+    cmd = [
+        "git", "-c", "i18n.logOutputEncoding=utf-8", "log",
+        "--encoding=utf-8", "--all", "--reverse", "--numstat",
+        "--format=COMMIT|%H|%at|%an|%ae|%s"
+    ]
     try:
         raw_log = subprocess.check_output(
             cmd, cwd=repo_dir, text=True, encoding="utf-8", errors="replace"
@@ -422,7 +426,7 @@ def extract_git_milestones(repo_dir: Path, commits: list, custom_milestones_file
     # 1. Extract Git tags
     try:
         tag_out = subprocess.check_output(
-            ["git", "tag", "-l", "--sort=creatordate", "--format=%(creatordate:unix)|%(refname:short)|%(contents:subject)"],
+            ["git", "-c", "i18n.logOutputEncoding=utf-8", "tag", "-l", "--sort=creatordate", "--format=%(creatordate:unix)|%(refname:short)|%(contents:subject)"],
             cwd=repo_dir, text=True, encoding="utf-8", errors="replace"
         )
         for line in tag_out.split("\n"):
