@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Repository Evolution Visualizer</title>
   <script src="libs/echarts.min.js"></script>
+  <script>
+    if (typeof echarts === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"><\/script>');
+    }
+  </script>
   <script src="visualizer_data.js"></script>
   <style>
     /* ============================================================= */
@@ -223,7 +228,7 @@
       cursor: grabbing;
     }
 
-    /* Left Dock: Live Commit HUD + Star Chart + Milestone Feed */
+    /* Left Dock: Real-time Commit HUD + Star Chart + Milestone Log */
     .left-dock {
       position: absolute;
       top: 14px;
@@ -232,15 +237,20 @@
       width: 320px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
       z-index: 25;
       pointer-events: none;
     }
 
     .commit-hud-panel {
-      box-shadow: 4px 4px 0px var(--yellow-marker) !important;
+      box-shadow: 4px 4px 0px var(--yellow-marker);
+      transform: rotate(-0.8deg);
       padding: 10px 12px;
-      transform: rotate(-0.5deg);
+    }
+
+    .commit-hud-panel:hover {
+      box-shadow: 6px 6px 0px var(--yellow-marker);
+      transform: rotate(0deg) translate(-1px, -1px);
     }
 
     .action-toast-title {
@@ -253,23 +263,26 @@
       display: flex;
       align-items: center;
       gap: 4px;
+      margin-bottom: 2px;
     }
 
     .action-toast-author {
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 800;
       color: var(--red-marker);
-      margin-top: 2px;
+      margin-top: 1px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .action-toast-msg {
-      font-size: 11.5px;
-      line-height: 1.35;
+      font-size: 12px;
+      font-weight: 600;
       color: var(--ink-black);
       margin-top: 3px;
+      line-height: 1.4;
+      max-height: 36px;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -757,16 +770,17 @@
   <main>
     <canvas id="viewport"></canvas>
 
-    <!-- Left Dock: Live Commit HUD + Star Chart + Milestone Feed -->
+    <!-- Left Dock: Real-time Commit HUD + Star Chart + Milestone Feed -->
     <div class="left-dock">
-      <!-- 1. Real-Time Commit HUD Card -->
+      <!-- 1. Live Action Commit HUD Card -->
       <div class="dock-panel commit-hud-panel" id="action-toast">
+        <div class="tape-strip" style="top: -8px; left: 16px; width: 40px; transform: rotate(-2deg);"></div>
         <div class="action-toast-title">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
           <span>实时代码提交</span>
         </div>
         <div class="action-toast-author" id="hud-author">@author · 0000000</div>
-        <div class="action-toast-msg" id="hud-msg" title="">提交信息描述</div>
+        <div class="action-toast-msg" id="hud-msg" title="">从零开始搭建仓库代码与架构演化</div>
       </div>
 
       <!-- 2. Star Growth Sparkline -->
@@ -777,12 +791,12 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--ink-black);"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             Star 增长演进
           </div>
-          <div class="dock-panel-badge" id="drawer-star-badge">0 / 462 ⭐</div>
+          <div class="dock-panel-badge" id="drawer-star-badge">0 / 0 ⭐</div>
         </div>
         <div id="echarts-star-box"></div>
       </div>
 
-      <!-- Real-Time Milestone Feed -->
+      <!-- 3. Real-Time Milestone Feed -->
       <div class="dock-panel milestone-feed-panel">
         <div class="tape-strip" style="top: -8px; left: 20px; width: 45px; transform: rotate(-2deg);"></div>
         <div class="dock-panel-header">
@@ -790,7 +804,7 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--red-marker);"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
             核心演进里程碑
           </div>
-          <div style="font-size: 11px; color: var(--ink-black); font-weight: 800;" id="milestone-counter">0 / 31</div>
+          <div style="font-size: 11px; color: var(--ink-black); font-weight: 800;" id="milestone-counter">0 / 0</div>
         </div>
         <div class="milestone-feed-container">
           <div class="timeline-stream" id="milestone-stream">
@@ -880,14 +894,6 @@
       canvas.width = width * window.devicePixelRatio;
       canvas.height = height * window.devicePixelRatio;
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-
-      // Auto-fit camera zoom dynamically based on total contributors & largest orbital tier
-      const totalDevs = (data && data.contributors) ? data.contributors.length : 0;
-      const numTiers = totalDevs > 90 ? 4 : totalDevs > 45 ? 3 : totalDevs > 18 ? 2 : 1;
-      const maxOrbitR = 340 + (numTiers - 1) * 54 + 40;
-      const minDim = Math.min(width, height);
-      const idealZoom = Math.min(0.85, (minDim * 0.44) / maxOrbitR);
-      camera.zoom = Math.max(0.45, idealZoom);
     }
     resizeCanvas();
     window.addEventListener("resize", () => {
@@ -938,10 +944,6 @@
       const picked = sortedDirs.slice(0, 6);
       if (picked.length === 0) picked.push("core", "src", "docs", "test");
 
-      const totalFilesEstimate = dirCount.size > 0 ? Array.from(dirCount.values()).reduce((a, b) => a + b, 0) : 0;
-      const modRadiusX = totalFilesEstimate > 500 ? 205 : 180;
-      const modRadiusY = totalFilesEstimate > 500 ? 135 : 115;
-
       const palette = ["#4ecdc4", "#ff6b6b", "#ffd93d", "#4ecdc4", "#ff6b6b", "#ffd93d"];
       const n = picked.length;
       return picked.map((name, i) => {
@@ -949,8 +951,8 @@
         return {
           id: `mod_${i}_${name}`,
           name: name,
-          x: Math.round(Math.cos(angle) * modRadiusX),
-          y: Math.round(Math.sin(angle) * modRadiusY),
+          x: Math.round(Math.cos(angle) * 180),
+          y: Math.round(Math.sin(angle) * 115),
           color: palette[i % palette.length],
           pattern: name.toLowerCase()
         };
@@ -1024,7 +1026,7 @@
     }
     const sparkParticles = [];
 
-    // Persistent Dynamic File Dot (Natural Sunflower Phyllotaxis Cluster with Adaptive Compaction)
+    // Persistent Dynamic File Dot (Compact Bounded Sunflower Phyllotaxis Cluster)
     class ActiveFilePill {
       constructor(path, mod, slotIndex = 0) {
         this.path = path || "main.py";
@@ -1032,17 +1034,17 @@
         this.mod = mod || MODULE_CLUSTERS[0];
         this.slotIndex = slotIndex;
         
-        // Natural sunflower phyllotaxis cluster with sub-linear adaptive compaction
-        // Keeps large modules (>500 files) bounded within max 96px radius to prevent cluster collisions!
+        // Compact bounded sunflower phyllotaxis cluster (Uniform 2D organic distribution)
+        // Damped radius prevents dots from expanding beyond 64px from module center
         const phi = 1.61803398875;
-        const maxModRadius = 96;
-        const r = Math.min(maxModRadius, 14 + Math.pow(slotIndex, 0.46) * 4.8);
+        const maxClusterR = 64;
+        const r = 12 + Math.min(maxClusterR, Math.pow(slotIndex, 0.42) * 4.2);
         const theta = slotIndex * 2 * Math.PI * (1 - 1 / phi);
         this.x = this.mod.x + Math.cos(theta) * r;
         this.y = this.mod.y + Math.sin(theta) * r;
         
         this.color = this.mod.color;
-        this.alpha = 1.0;
+        this.alpha = 0.85;
         this.pulseVal = 1.0;
         this.pulseColor = "#4ecdc4";
         this.locAdded = 0;
@@ -1065,11 +1067,12 @@
       }
     }
 
-    // Developer Actor (Multi-Tier Celestial Orbit with Anti-Collision Radial Staggering)
+    // Developer Actor (Multi-Tier Hierarchical Celestial Orbits with LOD)
     class DeveloperActor {
       constructor(login, firstCommitTime, index, total) {
         this.login = login;
         this.firstCommitTime = firstCommitTime;
+        this.index = index;
         this.isJoined = false;
         this.spawnScale = 0;
         this.spawnRipple = 0;
@@ -1078,21 +1081,29 @@
         this.locDeleted = 0;
         this.lruHeat = 0;
         this.pulseScale = 1.0;
-        this.rankIndex = index;
 
-        // Multi-tier planetary orbital distribution:
-        // Automatically splits contributors across 1~4 concentric rings to guarantee breathing space
-        const numTiers = total > 90 ? 4 : total > 45 ? 3 : total > 18 ? 2 : 1;
-        const tier = index % numTiers;
-        const baseR = 340 + tier * 54;
-        
-        const itemsInTier = Math.ceil(total / numTiers);
-        const tierIndex = Math.floor(index / numTiers);
-        // Golden ratio angle offset between tiers to prevent radial alignment crowding
-        const tierPhaseOffset = tier * 2.399963229728653; // Golden angle in radians
-        
-        this.slotAngle = (tierIndex / Math.max(1, itemsInTier)) * Math.PI * 2 + tierPhaseOffset;
-        this.homeRadius = baseR;
+        // Multi-tier hierarchical orbit distribution
+        if (index < 15) {
+          // Tier 1: Core Developers (Rank 1-15) - Inner Orbit, Large Avatar
+          this.tier = 1;
+          this.radiusSize = 13;
+          this.homeRadius = 295;
+          this.slotAngle = (index / 15) * Math.PI * 2;
+        } else if (index < 50) {
+          // Tier 2: Active Contributors (Rank 16-50) - Middle Orbit, Medium Avatar
+          this.tier = 2;
+          this.radiusSize = 9;
+          this.homeRadius = 330;
+          this.slotAngle = ((index - 15) / 35) * Math.PI * 2;
+        } else {
+          // Tier 3: Community Contributors (Rank 51+) - Outer Celestial Belt
+          this.tier = 3;
+          this.radiusSize = 5;
+          const beltIdx = index % 2;
+          this.homeRadius = 360 + beltIdx * 25;
+          this.slotAngle = ((index - 50) / Math.max(1, total - 50)) * Math.PI * 2;
+        }
+
         this.homeX = Math.cos(this.slotAngle) * this.homeRadius;
         this.homeY = Math.sin(this.slotAngle) * this.homeRadius;
 
@@ -1300,7 +1311,7 @@
     }
 
     // -------------------------------------------------------------
-    // ECharts Growth Chart (Stars or Cumulative Commits Fallback)
+    // ECharts Star History / Cumulative Commits (Hand-Drawn Doodle Palette)
     // -------------------------------------------------------------
     let echartInstance = null;
     let allStarDataPoints = [];
@@ -1310,17 +1321,16 @@
 
     function initECharts() {
       const dom = document.getElementById("echarts-star-box");
-      if (!dom) return;
+      if (!dom || typeof echarts === "undefined") return;
       echartInstance = echarts.init(dom, null, { renderer: "canvas" });
 
-      // Determine whether we have valid stars or fallback to Cumulative Commits
       const hasStars = data && data.stars && Array.isArray(data.stars) && data.stars.length > 0;
       isStarMode = hasStars;
 
       const startDateObj = new Date(startSimTime * 1000);
       const endDateObj = new Date(endSimTime * 1000);
-      const startStr = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth()+1).padStart(2,'0')}-${String(startDateObj.getDate()).padStart(2,'0')}`;
-      const endStr = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth()+1).padStart(2,'0')}-${String(endDateObj.getDate()).padStart(2,'0')}`;
+      const minDateStr = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth()+1).padStart(2,'0')}-${String(startDateObj.getDate()).padStart(2,'0')}`;
+      const maxDateStr = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth()+1).padStart(2,'0')}-${String(endDateObj.getDate()).padStart(2,'0')}`;
 
       if (hasStars) {
         allStarDataPoints = data.stars.map(s => {
@@ -1332,11 +1342,10 @@
             s.timestamp
           ];
         });
-        maxMetricCount = allStarDataPoints.length > 0 ? allStarDataPoints[allStarDataPoints.length - 1][1] : 0;
+        maxMetricCount = (data.project && data.project.totalStars) || (allStarDataPoints.length > 0 ? allStarDataPoints[allStarDataPoints.length - 1][1] : 0);
       } else {
-        // Dynamic Fallback: Generate Cumulative Commits curve
         let cum = 0;
-        allStarDataPoints = (data.commits || []).map((c, i) => {
+        allStarDataPoints = (data.commits || []).map(c => {
           cum++;
           const dt = new Date(c.timestamp * 1000);
           return [
@@ -1351,7 +1360,6 @@
         if (btnToggle) btnToggle.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg> 提交趋势图';
       }
 
-      // Dynamically calculate milestones for the curve
       ALL_STAR_MILESTONES = [];
       if (maxMetricCount > 0) {
         const steps = [0.1, 0.25, 0.5, 0.75, 1.0];
@@ -1360,7 +1368,7 @@
           const pt = allStarDataPoints.find(p => p[1] >= val);
           if (pt && !ALL_STAR_MILESTONES.some(m => m.value === val)) {
             ALL_STAR_MILESTONES.push({
-              name: `${val} ${isStarMode ? '⭐' : 'Commits'}`,
+              name: `${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val} ${isStarMode ? '⭐' : 'Commits'}`,
               value: val,
               coord: [pt[0], val]
             });
@@ -1381,15 +1389,15 @@
         },
         xAxis: {
           type: "time",
-          min: startStr,
-          max: endStr,
+          min: minDateStr,
+          max: maxDateStr,
           axisLine: { lineStyle: { color: "#2c2c2c", type: "dashed", width: 1.5 } },
           axisLabel: { color: "#2c2c2c", fontSize: 10, fontWeight: "bold" }
         },
         yAxis: {
           type: "value",
           min: 0,
-          max: Math.max(5, Math.ceil(maxMetricCount * 1.08)),
+          max: Math.max(5, Math.ceil(maxMetricCount * 1.05)),
           splitLine: { lineStyle: { color: "#e9e7db", type: "dashed" } },
           axisLabel: { color: "#2c2c2c", fontSize: 10, fontWeight: "bold" }
         },
@@ -1448,14 +1456,14 @@
       const currentMetricCount = visiblePoints.length > 0 ? visiblePoints[visiblePoints.length - 1][1] : 0;
       
       if (isStarMode) {
-        starDisplay.textContent = `${currentMetricCount} Stars`;
+        starDisplay.textContent = `${currentMetricCount.toLocaleString()} Stars`;
         if (drawerStarBadge) {
-          drawerStarBadge.textContent = `${currentMetricCount} / ${maxMetricCount} ⭐`;
+          drawerStarBadge.textContent = `${currentMetricCount.toLocaleString()} / ${maxMetricCount.toLocaleString()} ⭐`;
         }
       } else {
-        starDisplay.textContent = `${currentMetricCount} 提交`;
+        starDisplay.textContent = `${currentMetricCount.toLocaleString()} 提交`;
         if (drawerStarBadge) {
-          drawerStarBadge.textContent = `${currentMetricCount} / ${maxMetricCount} 提交`;
+          drawerStarBadge.textContent = `${currentMetricCount.toLocaleString()} / ${maxMetricCount.toLocaleString()} 提交`;
         }
       }
 
@@ -1779,26 +1787,27 @@
       ctx.fillText(coreLabel, 0, coreR + 15.5);
       ctx.restore();
 
-      // 3. Draw Persistent File Dots around their Module Cluster
-      const dotRadius = activeFilePills.size > 500 ? 2.8 : activeFilePills.size > 200 ? 3.5 : 4.2;
+      // 3. Draw Persistent File Dots around their Module Cluster (Fine-grained doodle stippling)
       for (const [path, pill] of activeFilePills.entries()) {
         ctx.save();
         ctx.fillStyle = pill.color;
         ctx.strokeStyle = "#2c2c2c";
-        ctx.lineWidth = 1.2;
-        ctx.globalAlpha = Math.max(0.35, Math.min(1.0, pill.alpha));
-        ctx.setLineDash([2, 2]);
+        ctx.lineWidth = 0.8;
+        ctx.globalAlpha = Math.max(0.4, Math.min(0.9, pill.alpha));
+        
+        // Compact stipple dots (2.2px normally, expands when pulsing)
+        const dotR = pill.pulseVal > 0.05 ? (2.2 + 2.0 * pill.pulseVal) : 2.2;
         ctx.beginPath();
-        ctx.arc(pill.x, pill.y, dotRadius, 0, Math.PI * 2);
+        ctx.arc(pill.x, pill.y, dotR, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
         // Pulse ring on edit
-        if (pill.pulseVal > 0) {
+        if (pill.pulseVal > 0.05) {
           ctx.strokeStyle = pill.pulseColor;
-          ctx.lineWidth = 1.8;
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.arc(pill.x, pill.y, dotRadius + 14 * (1 - pill.pulseVal), 0, Math.PI * 2);
+          ctx.arc(pill.x, pill.y, dotR + 12 * (1 - pill.pulseVal), 0, Math.PI * 2);
           ctx.stroke();
           pill.pulseVal = Math.max(0, pill.pulseVal - 0.03);
         }
@@ -1856,7 +1865,7 @@
         }
       });
 
-      // 7. Draw Developer Avatars (Doodle Style in Multi-Tier Orbit with Smart Anti-Crowding)
+      // 7. Draw Developer Avatars (Multi-Tier Celestial Orbits with Smart LOD)
       developers.forEach(dev => {
         if (!dev.isJoined || dev.spawnScale <= 0) return;
         ctx.save();
@@ -1864,22 +1873,22 @@
         ctx.scale(dev.spawnScale * dev.pulseScale, dev.spawnScale * dev.pulseScale);
 
         const avImg = avatarImages[dev.login];
-        const r = 13.5;
+        const r = dev.radiusSize || (dev.tier === 1 ? 13 : dev.tier === 2 ? 9 : 5);
 
         // Hard Offset Badge Shadow
-        ctx.fillStyle = "#4ecdc4";
+        ctx.fillStyle = dev.tier === 1 ? "#ffd93d" : dev.tier === 2 ? "#4ecdc4" : "#ff6b6b";
         ctx.beginPath();
-        ctx.arc(2.2, 2.2, r + 0.8, 0, Math.PI * 2);
+        ctx.arc(1.5, 1.5, r + 0.8, 0, Math.PI * 2);
         ctx.fill();
 
         // Expanding spawn ripple when joining
         if (dev.spawnRipple > 0) {
           ctx.strokeStyle = "#ff6b6b";
-          ctx.lineWidth = 2;
-          ctx.setLineDash([3, 3]);
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([2, 2]);
           ctx.globalAlpha = dev.spawnRipple;
           ctx.beginPath();
-          ctx.arc(0, 0, r + 24 * (1 - dev.spawnRipple), 0, Math.PI * 2);
+          ctx.arc(0, 0, r + 18 * (1 - dev.spawnRipple), 0, Math.PI * 2);
           ctx.stroke();
           ctx.globalAlpha = 1.0;
         }
@@ -1888,7 +1897,7 @@
         ctx.beginPath();
         ctx.arc(0, 0, r, 0, Math.PI * 2);
         ctx.clip();
-        if (avImg && avImg.complete) {
+        if (avImg && avImg.complete && avImg.naturalWidth > 0) {
           ctx.drawImage(avImg, -r, -r, r * 2, r * 2);
         } else {
           ctx.fillStyle = "#fffef5";
@@ -1901,45 +1910,36 @@
         ctx.translate(dev.x, dev.y);
         ctx.scale(dev.spawnScale * dev.pulseScale, dev.spawnScale * dev.pulseScale);
         ctx.strokeStyle = dev.laserProgress > 0 ? dev.laserColor : "#2c2c2c";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = dev.tier === 1 ? 1.8 : 1.2;
+        ctx.setLineDash([2, 2]);
         ctx.beginPath();
-        ctx.arc(0, 0, r + 1, 0, Math.PI * 2);
+        ctx.arc(0, 0, r + 0.8, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
 
-        // Developer Name (Smart Visibility & Anti-Crowding)
-        // Only render labels when:
-        // 1. Total contributors <= 25 (compact repos)
-        // 2. Or this developer is actively committing (dev.laserProgress > 0 or dev.activeTimer > 0)
-        // 3. Or this developer is newly joined (dev.spawnRipple > 0)
-        // 4. Or this developer is in the Top 6 most active committers
-        const showLabel = (developers.size <= 25) ||
-                          (dev.laserProgress > 0) ||
-                          (dev.activeTimer > 0) ||
-                          (dev.spawnRipple > 0) ||
-                          (dev.rankIndex < 6);
-
-        if (showLabel) {
+        // Smart Label LOD (Only draw text for top contributors or actively swooping/hot devs)
+        const shouldShowLabel = (dev.tier === 1) || (dev.activeTimer > 0) || (dev.lruHeat > 60);
+        if (shouldShowLabel) {
           ctx.save();
-          if (dev.laserProgress > 0) {
-            ctx.font = "bold 11px sans-serif";
-            const txt = `@${dev.login}`;
-            const tw = ctx.measureText(txt).width;
+          ctx.font = dev.tier === 1 ? "bold 10px sans-serif" : "bold 9px sans-serif";
+          ctx.fillStyle = dev.activeTimer > 0 ? "#ff6b6b" : "#2c2c2c";
+          ctx.textAlign = "center";
+          
+          if (dev.activeTimer > 0) {
+            const metrics = ctx.measureText(dev.login);
+            const tagW = metrics.width + 8;
+            const tagH = 14;
             ctx.fillStyle = "#ffd93d";
-            ctx.fillRect(dev.x - tw / 2 - 4, dev.y - 28, tw + 8, 16);
+            ctx.fillRect(dev.x - tagW / 2 + 1, dev.y - r - 15 + 1, tagW, tagH);
+            ctx.fillStyle = "#fffef5";
             ctx.strokeStyle = "#2c2c2c";
             ctx.lineWidth = 1;
-            ctx.setLineDash([2, 2]);
-            ctx.strokeRect(dev.x - tw / 2 - 4, dev.y - 28, tw + 8, 16);
+            ctx.strokeRect(dev.x - tagW / 2, dev.y - r - 15, tagW, tagH);
+            ctx.fillRect(dev.x - tagW / 2, dev.y - r - 15, tagW, tagH);
             ctx.fillStyle = "#2c2c2c";
-            ctx.textAlign = "center";
-            ctx.fillText(txt, dev.x, dev.y - 16);
+            ctx.fillText(dev.login, dev.x, dev.y - r - 4);
           } else {
-            ctx.font = "bold 9.5px sans-serif";
-            ctx.fillStyle = "#2c2c2c";
-            ctx.textAlign = "center";
-            ctx.fillText(dev.login, dev.x, dev.y - (r + 3.5));
+            ctx.fillText(dev.login, dev.x, dev.y - r - 4);
           }
           ctx.restore();
         }
@@ -2246,7 +2246,7 @@
           const a = document.createElement("a");
           a.style.display = "none";
           a.href = url;
-          a.download = `astrbot_plugin_fullpage_evolution_${Date.now()}.${ext}`;
+          a.download = `repo_evolution_${Date.now()}.${ext}`;
           document.body.appendChild(a);
           a.click();
           setTimeout(() => {
