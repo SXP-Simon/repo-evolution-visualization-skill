@@ -905,19 +905,53 @@
     }
 
     // -------------------------------------------------------------
-    // Architectural Clustered Modules (Dynamic from data.modules or Smart Fallback)
+    // Architectural Clustered Modules (100% Dynamically Resolved)
     // -------------------------------------------------------------
-    const MODULE_CLUSTERS = (data.modules && Array.isArray(data.modules) && data.modules.length >= 4) ? data.modules : [
-      { id: "core", name: "核心引擎", x: -170, y: -90, color: "#4ecdc4" },
-      { id: "features", name: "业务功能", x: 170, y: -90, color: "#ff6b6b" },
-      { id: "ui", name: "界面/交互", x: 200, y: 110, color: "#ffd93d" },
-      { id: "adapters", name: "适配扩展", x: -200, y: 110, color: "#4ecdc4" },
-      { id: "infra", name: "基础存储", x: 0, y: 190, color: "#ff6b6b" },
-      { id: "docs", name: "文档配置", x: 0, y: -190, color: "#ffd93d" }
-    ];
+    function buildDynamicModules() {
+      // 1. If agent supplied explicit data.modules, use them directly
+      if (data && data.modules && Array.isArray(data.modules) && data.modules.length > 0) {
+        return data.modules;
+      }
+
+      // 2. Otherwise dynamically derive top directory clusters from actual file paths in commits
+      const dirCount = new Map();
+      if (data && data.commits && Array.isArray(data.commits)) {
+        for (const c of data.commits) {
+          if (c.files && Array.isArray(c.files)) {
+            for (const f of c.files) {
+              const p = (f.path || "").trim();
+              if (!p) continue;
+              const segs = p.split(/[/\\]/);
+              const topDir = segs.length > 1 ? segs[0] : (p.includes(".") ? p.split(".").pop() : "root");
+              dirCount.set(topDir, (dirCount.get(topDir) || 0) + 1);
+            }
+          }
+        }
+      }
+
+      const sortedDirs = Array.from(dirCount.entries()).sort((a, b) => b[1] - a[1]).map(e => e[0]);
+      const picked = sortedDirs.slice(0, 6);
+      if (picked.length === 0) picked.push("core", "src", "docs", "test");
+
+      const palette = ["#4ecdc4", "#ff6b6b", "#ffd93d", "#4ecdc4", "#ff6b6b", "#ffd93d"];
+      const n = picked.length;
+      return picked.map((name, i) => {
+        const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+        return {
+          id: `mod_${i}_${name}`,
+          name: name,
+          x: Math.round(Math.cos(angle) * 180),
+          y: Math.round(Math.sin(angle) * 115),
+          color: palette[i % palette.length],
+          pattern: name.toLowerCase()
+        };
+      });
+    }
+
+    const MODULE_CLUSTERS = buildDynamicModules();
 
     function mapFileToModule(filePath) {
-      if (!filePath || typeof filePath !== "string") return MODULE_CLUSTERS[0];
+      if (!filePath || typeof filePath !== "string" || MODULE_CLUSTERS.length === 0) return MODULE_CLUSTERS[0];
       const lower = filePath.toLowerCase();
 
       // Custom module matching rules if defined in dataset
@@ -930,24 +964,21 @@
         }
       }
 
-      // Universal smart directory & extension matching
-      if (lower.includes("doc") || lower.endsWith(".md") || lower.endsWith(".json") || lower.endsWith(".yaml") || lower.endsWith(".toml") || lower.endsWith(".txt")) {
-        return MODULE_CLUSTERS.find(m => m.id === "docs") || MODULE_CLUSTERS[MODULE_CLUSTERS.length - 1];
-      }
-      if (lower.includes("db") || lower.includes("store") || lower.includes("storage") || lower.includes("infra") || lower.includes("util") || lower.includes("config") || lower.includes("model")) {
-        return MODULE_CLUSTERS.find(m => m.id === "infra") || MODULE_CLUSTERS[4] || MODULE_CLUSTERS[0];
-      }
-      if (lower.includes("ui") || lower.includes("component") || lower.includes("view") || lower.includes("page") || lower.includes("template") || lower.includes("theme") || lower.includes("style") || lower.endsWith(".css") || lower.endsWith(".vue") || lower.endsWith(".tsx") || lower.endsWith(".html")) {
-        return MODULE_CLUSTERS.find(m => m.id === "ui") || MODULE_CLUSTERS[2] || MODULE_CLUSTERS[0];
-      }
-      if (lower.includes("adapter") || lower.includes("plugin") || lower.includes("client") || lower.includes("driver") || lower.includes("platform") || lower.includes("network")) {
-        return MODULE_CLUSTERS.find(m => m.id === "adapters") || MODULE_CLUSTERS[3] || MODULE_CLUSTERS[0];
-      }
-      if (lower.includes("feature") || lower.includes("service") || lower.includes("handler") || lower.includes("api") || lower.includes("app") || lower.includes("domain") || lower.includes("controller")) {
-        return MODULE_CLUSTERS.find(m => m.id === "features") || MODULE_CLUSTERS[1] || MODULE_CLUSTERS[0];
+      // Check pattern or id
+      for (const mod of MODULE_CLUSTERS) {
+        if (mod.pattern && lower.includes(mod.pattern)) return mod;
+        if (mod.id && lower.includes(mod.id.toLowerCase())) return mod;
+        if (mod.name && lower.includes(mod.name.toLowerCase())) return mod;
       }
 
-      return MODULE_CLUSTERS[0];
+      // Consistent hash distribution fallback
+      let hash = 0;
+      for (let i = 0; i < filePath.length; i++) {
+        hash = (hash << 5) - hash + filePath.charCodeAt(i);
+        hash |= 0;
+      }
+      const idx = Math.abs(hash) % MODULE_CLUSTERS.length;
+      return MODULE_CLUSTERS[idx];
     }
 
     // Spark Particles upon commit (Hand-drawn marker sparkles)

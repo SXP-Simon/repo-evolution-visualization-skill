@@ -15,19 +15,20 @@
 
 ---
 
-## 2. 预设的 6 大标准架构模块
+## 2. 动态架构模块聚类原理
 
-默认提供的 6 大模块坐标与配色：
+系统完全支持由 AI Agent 根据代码仓库真实的顶级目录结构（例如 `src`, `components`, `pkg`, `api`, `crates`, `docs` 等）自适应生成 4 ~ 6 个架构模块，或由系统全自动动态聚类。
 
-```javascript
-const MODULE_CLUSTERS = [
-  { id: "app", name: "应用调度", x: -170, y: -90, color: "#4ecdc4" },
-  { id: "domain", name: "业务引擎", x: 170, y: -90, color: "#ff6b6b" },
-  { id: "templates", name: "界面/主题", x: 200, y: 110, color: "#ffd93d" },
-  { id: "platform", name: "平台适配", x: -200, y: 110, color: "#4ecdc4" },
-  { id: "infra", name: "基础设施", x: 0, y: 190, color: "#ff6b6b" },
-  { id: "docs", name: "文档配置", x: 0, y: -190, color: "#ffd93d" }
-];
+### 模块数据结构示例（`modules.json`）
+```json
+[
+  { "id": "core", "name": "核心调度", "x": -170, "y": -90, "color": "#4ecdc4", "pattern": "core" },
+  { "id": "engine", "name": "运算引擎", "x": 170, "y": -90, "color": "#ff6b6b", "pattern": "engine" },
+  { "id": "ui", "name": "用户界面", "x": 200, "y: 110, "color": "#ffd93d", "pattern": "ui" },
+  { "id": "adapters", "name": "适配拓展", "x": -200, "y": 110, "color": "#4ecdc4", "pattern": "adapter" },
+  { "id": "storage", "name": "数据持久", "x": 0, "y": 190, "color": "#ff6b6b", "pattern": "db" },
+  { "id": "docs", "name": "配置文档", "x": 0, "y": -190, "color": "#ffd93d", "pattern": "doc" }
+]
 ```
 
 ---
