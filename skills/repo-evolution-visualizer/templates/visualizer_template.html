@@ -955,11 +955,27 @@
       }
 
       const sortedDirs = Array.from(dirCount.entries()).sort((a, b) => b[1] - a[1]).map(e => e[0]);
-      const picked = sortedDirs.slice(0, 6);
-      if (picked.length === 0) picked.push("core", "src", "docs", "test");
+      let picked = sortedDirs.slice(0, 6);
+      if (picked.length === 0) picked.push("core");
 
-      const palette = ["#4ecdc4", "#ff6b6b", "#ffd93d", "#4ecdc4", "#ff6b6b", "#ffd93d"];
+      const palette = ["#4ecdc4", "#ff6b6b", "#ffd93d", "#a78bfa", "#38bdf8", "#4ade80"];
       const n = picked.length;
+
+      if (n === 1) {
+        return [{ id: `mod_0_${picked[0]}`, name: picked[0], x: 0, y: -90, color: palette[0], pattern: picked[0].toLowerCase() }];
+      } else if (n === 2) {
+        return [
+          { id: `mod_0_${picked[0]}`, name: picked[0], x: -140, y: 0, color: palette[0], pattern: picked[0].toLowerCase() },
+          { id: `mod_1_${picked[1]}`, name: picked[1], x: 140, y: 0, color: palette[1], pattern: picked[1].toLowerCase() }
+        ];
+      } else if (n === 3) {
+        return [
+          { id: `mod_0_${picked[0]}`, name: picked[0], x: 0, y: -110, color: palette[0], pattern: picked[0].toLowerCase() },
+          { id: `mod_1_${picked[1]}`, name: picked[1], x: -130, y: 65, color: palette[1], pattern: picked[1].toLowerCase() },
+          { id: `mod_2_${picked[2]}`, name: picked[2], x: 130, y: 65, color: palette[2], pattern: picked[2].toLowerCase() }
+        ];
+      }
+
       return picked.map((name, i) => {
         const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
         return {
@@ -1096,26 +1112,45 @@
         this.lruHeat = 0;
         this.pulseScale = 1.0;
 
-        // Multi-tier hierarchical orbit distribution
-        if (index < 15) {
-          // Tier 1: Core Developers (Rank 1-15) - Inner Orbit, Large Avatar
+        // Adaptive hierarchical celestial orbit distribution
+        if (total <= 12) {
+          // Small Team Mode (1-12 devs): Single pristine orbit, evenly spaced across full 360 deg, with premium avatars!
           this.tier = 1;
-          this.radiusSize = 13;
-          this.homeRadius = 295;
-          this.slotAngle = (index / 15) * Math.PI * 2;
-        } else if (index < 50) {
-          // Tier 2: Active Contributors (Rank 16-50) - Middle Orbit, Medium Avatar
-          this.tier = 2;
-          this.radiusSize = 9;
-          this.homeRadius = 330;
-          this.slotAngle = ((index - 15) / 35) * Math.PI * 2;
+          this.radiusSize = 14;
+          this.homeRadius = 280;
+          this.slotAngle = (index / total) * Math.PI * 2;
+        } else if (total <= 35) {
+          // Medium Team Mode (13-35 devs): 2-tier balanced orbits
+          if (index < 10) {
+            this.tier = 1;
+            this.radiusSize = 13;
+            this.homeRadius = 285;
+            this.slotAngle = (index / 10) * Math.PI * 2;
+          } else {
+            this.tier = 2;
+            this.radiusSize = 9;
+            this.homeRadius = 330;
+            this.slotAngle = ((index - 10) / (total - 10)) * Math.PI * 2;
+          }
         } else {
-          // Tier 3: Community Contributors (Rank 51+) - Outer Celestial Belt
-          this.tier = 3;
-          this.radiusSize = 5;
-          const beltIdx = index % 2;
-          this.homeRadius = 360 + beltIdx * 25;
-          this.slotAngle = ((index - 50) / Math.max(1, total - 50)) * Math.PI * 2;
+          // Large-Scale Ecosystem Mode (36+ devs): 3-tier celestial hierarchy
+          if (index < 15) {
+            this.tier = 1;
+            this.radiusSize = 13;
+            this.homeRadius = 295;
+            this.slotAngle = (index / 15) * Math.PI * 2;
+          } else if (index < 50) {
+            this.tier = 2;
+            this.radiusSize = 9;
+            this.homeRadius = 330;
+            this.slotAngle = ((index - 15) / 35) * Math.PI * 2;
+          } else {
+            this.tier = 3;
+            this.radiusSize = 5;
+            const beltIdx = index % 2;
+            this.homeRadius = 360 + beltIdx * 25;
+            this.slotAngle = ((index - 50) / Math.max(1, total - 50)) * Math.PI * 2;
+          }
         }
 
         this.homeX = Math.cos(this.slotAngle) * this.homeRadius;
@@ -1809,8 +1844,9 @@
         ctx.lineWidth = 0.8;
         ctx.globalAlpha = Math.max(0.4, Math.min(0.9, pill.alpha));
         
-        // Compact stipple dots (2.2px normally, expands when pulsing)
-        const dotR = pill.pulseVal > 0.05 ? (2.2 + 2.0 * pill.pulseVal) : 2.2;
+        // Adaptive stipple dots (2.2px for large repos, 3.0px for small repos < 60 files)
+        const baseDotR = activeFilePills.size < 60 ? 3.0 : 2.2;
+        const dotR = pill.pulseVal > 0.05 ? (baseDotR + 2.0 * pill.pulseVal) : baseDotR;
         ctx.beginPath();
         ctx.arc(pill.x, pill.y, dotR, 0, Math.PI * 2);
         ctx.fill();
@@ -1931,8 +1967,8 @@
         ctx.stroke();
         ctx.restore();
 
-        // Smart Label LOD (Only draw text for top contributors or actively swooping/hot devs)
-        const shouldShowLabel = (dev.tier === 1) || (dev.activeTimer > 0) || (dev.lruHeat > 60);
+        // Smart Label LOD (Always show for small teams <= 15, or Tier 1, or active committers)
+        const shouldShowLabel = (developers.size <= 15) || (dev.tier === 1) || (dev.activeTimer > 0) || (dev.lruHeat > 60);
         if (shouldShowLabel) {
           ctx.save();
           ctx.font = dev.tier === 1 ? "bold 10px sans-serif" : "bold 9px sans-serif";
