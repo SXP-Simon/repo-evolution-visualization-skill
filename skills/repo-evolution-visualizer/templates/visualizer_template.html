@@ -1,0 +1,2116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>从零开始的群分析总结插件（一周年）- 手绘涂鸦演进日志</title>
+  <script src="libs/echarts.min.js"></script>
+  <script src="visualizer_data.js"></script>
+  <style>
+    /* ============================================================= */
+    /* Hand-Drawn Doodle (手绘涂鸦风) Design System Tokens            */
+    /* ============================================================= */
+    :root {
+      --ink-black: #2c2c2c;
+      --paper-white: #fffef5;
+      --paper-muted: #f8f7f0;
+      --red-marker: #ff6b6b;
+      --teal-marker: #4ecdc4;
+      --yellow-marker: #ffd93d;
+      --purple-marker: #a78bfa;
+      --pink-marker: #f472b6;
+      --blue-marker: #38bdf8;
+      --orange-marker: #fb923c;
+      --green-marker: #4ade80;
+      --notebook-line: #e9e7db;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    /* Hand-Drawn Sleek Scrollbar */
+    *::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    *::-webkit-scrollbar-track {
+      background: var(--paper-muted);
+      border-left: 1px dashed var(--ink-black);
+    }
+    *::-webkit-scrollbar-thumb {
+      background: var(--teal-marker);
+      border: 1px dashed var(--ink-black);
+      border-radius: 4px;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: var(--red-marker);
+    }
+
+    body {
+      background-color: var(--paper-white);
+      background-image: repeating-linear-gradient(transparent, transparent 27px, var(--notebook-line) 28px);
+      color: var(--ink-black);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Comic Sans MS", cursive, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 64px 1fr 68px;
+    }
+
+    /* Tape Strip Decoration */
+    .tape-strip {
+      position: absolute;
+      height: 14px;
+      background: rgba(255, 217, 61, 0.85);
+      border: 1px dashed rgba(44, 44, 44, 0.4);
+      z-index: 10;
+      pointer-events: none;
+      box-shadow: 1px 1px 0px rgba(44, 44, 44, 0.2);
+    }
+
+    /* Top Navigation Bar */
+    header {
+      background: var(--paper-white);
+      border-bottom: 2px dashed var(--ink-black);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 30;
+      position: relative;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-tag {
+      background: var(--yellow-marker);
+      border: 2px dashed var(--ink-black);
+      color: var(--ink-black);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 2px 2px 0px var(--ink-black);
+      transform: rotate(-1.5deg);
+      transition: all 0.2s ease-in-out;
+    }
+
+    .brand-tag:hover {
+      transform: rotate(0deg) translate(1px, 1px);
+      box-shadow: 1px 1px 0px var(--ink-black);
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink-black);
+    }
+
+    .brand-repo {
+      font-size: 12px;
+      color: var(--ink-black);
+      opacity: 0.65;
+      margin-left: 4px;
+    }
+
+    .header-metrics {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .metric-chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--paper-white);
+      border: 2px dashed var(--ink-black);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--ink-black);
+      box-shadow: 2px 2px 0px var(--teal-marker);
+      transform: rotate(-0.5deg);
+      transition: all 0.2s ease-in-out;
+    }
+
+    .metric-chip:nth-child(even) {
+      transform: rotate(0.6deg);
+    }
+
+    .metric-chip:hover {
+      transform: rotate(0deg) translate(1px, 1px);
+      box-shadow: 1px 1px 0px var(--teal-marker);
+    }
+
+    .metric-chip strong {
+      font-weight: 800;
+      color: var(--ink-black);
+    }
+
+    .metric-chip.date strong { color: var(--ink-black); text-decoration: underline wavy var(--red-marker); }
+    .metric-chip.star strong { color: var(--ink-black); text-decoration: underline wavy var(--yellow-marker); }
+    .metric-chip.add { background: #f0fdf4; box-shadow: 2px 2px 0px var(--teal-marker); }
+    .metric-chip.del { background: #fff1f2; box-shadow: 2px 2px 0px var(--red-marker); }
+
+    .btn-header {
+      background: var(--paper-white);
+      border: 2px dashed var(--ink-black);
+      color: var(--ink-black);
+      padding: 5px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 2px 2px 0px var(--red-marker);
+      transform: rotate(-1deg);
+      transition: all 0.2s ease-in-out;
+    }
+
+    .btn-header:nth-child(even) {
+      transform: rotate(1deg);
+    }
+
+    .btn-header:hover {
+      box-shadow: 4px 4px 0px var(--red-marker);
+      transform: translate(-1px, -1px);
+    }
+
+    .btn-header.active {
+      background: var(--ink-black);
+      color: var(--paper-white);
+      box-shadow: 2px 2px 0px var(--teal-marker);
+    }
+
+    .btn-header:active {
+      transform: translate(2px, 2px);
+      box-shadow: none;
+    }
+
+    /* Main Stage */
+    main {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background-color: var(--paper-white);
+      background-image: repeating-linear-gradient(transparent, transparent 27px, var(--notebook-line) 28px);
+      overflow: hidden;
+    }
+
+    #viewport {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    #viewport:active {
+      cursor: grabbing;
+    }
+
+    /* Live Action Toast (Top-Left) */
+    .action-toast {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background: var(--paper-white);
+      border: 2px dashed var(--ink-black);
+      border-radius: 4px;
+      padding: 8px 12px;
+      max-width: 380px;
+      box-shadow: 3px 3px 0px var(--yellow-marker);
+      transform: rotate(-1deg);
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    .action-toast-title {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--ink-black);
+      opacity: 0.65;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .action-toast-author {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--red-marker);
+      margin-top: 1px;
+    }
+
+    .action-toast-msg {
+      font-size: 12px;
+      color: var(--ink-black);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Left Dock: Star Chart + Milestone Log */
+    .left-dock {
+      position: absolute;
+      top: 80px;
+      bottom: 14px;
+      left: 14px;
+      width: 310px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 25;
+      pointer-events: none;
+    }
+
+    .dock-panel {
+      background: var(--paper-white);
+      border: 2px dashed var(--ink-black);
+      border-radius: 4px;
+      box-shadow: 4px 4px 0px var(--teal-marker);
+      padding: 12px;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transform: rotate(-0.5deg);
+      transition: all 0.2s ease-in-out;
+    }
+
+    .dock-panel:hover {
+      box-shadow: 6px 6px 0px var(--teal-marker);
+      transform: rotate(0deg) translate(-1px, -1px);
+    }
+
+    .milestone-feed-panel {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transform: rotate(0.6deg);
+      box-shadow: 4px 4px 0px var(--red-marker);
+    }
+
+    .milestone-feed-panel:hover {
+      box-shadow: 6px 6px 0px var(--red-marker);
+      transform: rotate(0deg) translate(-1px, -1px);
+    }
+
+    .dock-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+      border-bottom: 2px dashed var(--ink-black);
+    }
+
+    .dock-panel-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--ink-black);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dock-panel-badge {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--ink-black);
+      background: var(--yellow-marker);
+      border: 1px dashed var(--ink-black);
+      padding: 1px 6px;
+      border-radius: 4px;
+      transform: rotate(-1deg);
+    }
+
+    #echarts-star-box {
+      width: 100%;
+      height: 125px;
+    }
+
+    /* Milestone Feed Stream */
+    .milestone-feed-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 2px 4px 4px 0;
+      position: relative;
+    }
+
+    .timeline-stream {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .milestone-node {
+      position: relative;
+      padding: 8px 10px;
+      background: var(--paper-white);
+      border: 1.5px dashed var(--ink-black);
+      border-radius: 4px;
+      animation: feedSoftFadeIn 0.3s ease-out;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .milestone-node:hover {
+      background: #fffdf0;
+      transform: translate(-1px, -1px);
+      box-shadow: 2px 2px 0px var(--yellow-marker);
+    }
+
+    @keyframes feedSoftFadeIn {
+      0% {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .milestone-node.highlight {
+      background: #fff9e6;
+      border-color: var(--red-marker);
+      box-shadow: 2px 2px 0px var(--red-marker);
+    }
+
+    .node-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 3px;
+    }
+
+    /* Milestone Hand-Drawn Color Badges */
+    .node-tag {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 3px;
+      border: 1px dashed var(--ink-black);
+      transform: rotate(-1deg);
+      box-shadow: 1px 1px 0px var(--ink-black);
+      display: inline-block;
+    }
+
+    .tag-open-source { background: var(--yellow-marker); color: var(--ink-black); }
+    .tag-anniversary { background: var(--red-marker); color: #ffffff; }
+    .tag-community { background: var(--yellow-marker); color: var(--ink-black); }
+    .tag-core-feature { background: var(--red-marker); color: #ffffff; }
+    .tag-feature { background: var(--teal-marker); color: var(--ink-black); }
+    .tag-theme { background: var(--pink-marker); color: #ffffff; }
+    .tag-art { background: var(--purple-marker); color: #ffffff; }
+    .tag-platform { background: var(--blue-marker); color: var(--ink-black); }
+    .tag-fun { background: var(--orange-marker); color: #ffffff; }
+    .tag-optimize { background: var(--green-marker); color: var(--ink-black); }
+
+    .node-date {
+      font-size: 10px;
+      color: var(--ink-black);
+      opacity: 0.6;
+      font-weight: 700;
+    }
+
+    .node-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--ink-black);
+      margin: 1px 0;
+      line-height: 1.35;
+    }
+
+    .node-desc {
+      font-size: 11px;
+      color: var(--ink-black);
+      opacity: 0.75;
+      line-height: 1.4;
+    }
+
+    /* Right Contributor Leaderboard */
+    .contributors-drawer {
+      position: absolute;
+      top: 14px;
+      bottom: 14px;
+      right: 14px;
+      width: 310px;
+      background: var(--paper-white);
+      border: 2px dashed var(--ink-black);
+      border-radius: 4px;
+      box-shadow: 4px 4px 0px var(--yellow-marker);
+      display: flex;
+      flex-direction: column;
+      z-index: 25;
+      transform: rotate(0.4deg);
+      transition: all 0.25s ease-in-out;
+    }
+
+    .contributors-drawer.collapsed {
+      transform: translateX(330px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .contrib-header {
+      padding: 10px 14px;
+      border-bottom: 2px dashed var(--ink-black);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--paper-muted);
+    }
+
+    .contrib-title {
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--ink-black);
+    }
+
+    .contrib-lru-tag {
+      font-size: 11px;
+      color: var(--ink-black);
+      background: var(--teal-marker);
+      border: 1px dashed var(--ink-black);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 800;
+      transform: rotate(-1deg);
+    }
+
+    .contrib-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .contrib-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border: 1.5px dashed var(--ink-black);
+      border-radius: 4px;
+      background: var(--paper-white);
+      transition: all 0.2s ease-in-out;
+      position: relative;
+    }
+
+    .contrib-row:hover {
+      background: #fffdf0;
+      transform: translate(-1px, -1px);
+      box-shadow: 2px 2px 0px var(--teal-marker);
+    }
+
+    .contrib-row.heat-active {
+      background: #fff9e6;
+      border-color: var(--red-marker);
+      box-shadow: 2px 2px 0px var(--red-marker);
+      transform: rotate(-0.5deg);
+    }
+
+    .contrib-rank-num {
+      font-size: 11px;
+      font-weight: 800;
+      width: 20px;
+      height: 20px;
+      line-height: 18px;
+      text-align: center;
+      color: var(--ink-black);
+      border: 1px dashed var(--ink-black);
+      border-radius: 4px;
+      background: var(--paper-muted);
+      flex-shrink: 0;
+    }
+
+    .rank-gold { background: var(--yellow-marker); font-weight: 900; }
+    .rank-silver { background: #e2e8f0; font-weight: 900; }
+    .rank-bronze { background: #fed7aa; font-weight: 900; }
+
+    .contrib-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 1.5px dashed var(--ink-black);
+      background-size: cover;
+      background-position: center;
+      flex-shrink: 0;
+    }
+
+    .contrib-meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .contrib-username {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink-black);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      line-height: 1.3;
+    }
+
+    .contrib-sprint-badge {
+      font-size: 10px;
+      color: var(--red-marker);
+      font-weight: 800;
+    }
+
+    .contrib-stats {
+      display: flex;
+      gap: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .c-add { color: #15803d; }
+    .c-del { color: var(--red-marker); }
+    .c-cmt { color: var(--ink-black); opacity: 0.6; }
+
+    /* Bottom Doodle Toolbar */
+    footer {
+      background: var(--paper-white);
+      border-top: 2px dashed var(--ink-black);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 20px;
+      z-index: 30;
+      position: relative;
+    }
+
+    .btn-action {
+      background: var(--paper-white);
+      border: 2px dashed var(--ink-black);
+      color: var(--ink-black);
+      padding: 5px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 2px 2px 0px var(--teal-marker);
+      transform: rotate(-0.5deg);
+      transition: all 0.2s ease-in-out;
+    }
+
+    .btn-action:hover {
+      box-shadow: 4px 4px 0px var(--teal-marker);
+      transform: translate(-1px, -1px);
+    }
+
+    .btn-action.primary {
+      background: var(--ink-black);
+      color: var(--paper-white);
+      box-shadow: 2px 2px 0px var(--red-marker);
+    }
+
+    .btn-action.primary:hover {
+      box-shadow: 4px 4px 0px var(--red-marker);
+    }
+
+    .btn-action:active {
+      transform: translate(2px, 2px);
+      box-shadow: none;
+    }
+
+    .timeline-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .timeline-slider {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--paper-muted);
+      border: 1.5px dashed var(--ink-black);
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .timeline-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      background: var(--red-marker);
+      border: 1.5px solid var(--ink-black);
+      cursor: pointer;
+      box-shadow: 1px 1px 0px var(--ink-black);
+      transform: rotate(45deg);
+      transition: transform 0.1s;
+    }
+
+    .timeline-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.3) rotate(45deg);
+    }
+
+    .speed-pills {
+      display: flex;
+      background: var(--paper-muted);
+      border: 2px dashed var(--ink-black);
+      border-radius: 4px;
+      padding: 2px;
+      gap: 2px;
+      box-shadow: 2px 2px 0px var(--ink-black);
+    }
+
+    .speed-pill {
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 800;
+      border-radius: 3px;
+      cursor: pointer;
+      color: var(--ink-black);
+      transition: all 0.15s;
+    }
+
+    .speed-pill.active {
+      background: var(--yellow-marker);
+      border: 1px dashed var(--ink-black);
+      box-shadow: 1px 1px 0px var(--ink-black);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navbar -->
+  <header>
+    <div class="tape-strip" style="top: -6px; left: 180px; width: 50px; transform: rotate(-2deg);"></div>
+    <div class="brand-section">
+      <div class="brand-tag">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span class="brand-title" id="brand-title">Repository Evolution Visualizer</span>
+      </div>
+      <span class="brand-repo" id="brand-repo">owner / repository</span>
+    </div>
+
+    <div class="header-metrics">
+      <div class="metric-chip date">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <strong id="date-display">2025-08-24</strong>
+      </div>
+      <div class="metric-chip star">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <strong id="star-display">0 Stars</strong>
+      </div>
+      <div class="metric-chip">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
+        <strong id="commits-display">0 提交</strong>
+      </div>
+      <div class="metric-chip add">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <strong id="loc-add-display">+0 行</strong>
+      </div>
+      <div class="metric-chip del">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <strong id="loc-del-display">-0 行</strong>
+      </div>
+
+      <button class="btn-header active" id="btn-toggle-echarts">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        Star 趋势图
+      </button>
+
+      <button class="btn-header active" id="btn-toggle-contrib">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        贡献者动态榜
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Canvas & Overlays -->
+  <main>
+    <canvas id="viewport"></canvas>
+
+    <!-- Top-Left Action Toast -->
+    <div class="action-toast" id="action-toast">
+      <div class="action-toast-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
+        <span>实时代码提交</span>
+      </div>
+      <div class="action-toast-author" id="hud-author">@SXP-Simon · 初始化项目</div>
+      <div class="action-toast-msg" id="hud-msg">从零开始搭建 AstrBot QQ 群每日分析与总结插件</div>
+    </div>
+
+    <!-- Left Dock: Star Chart + Milestone Feed -->
+    <div class="left-dock">
+      <!-- Star Growth Sparkline -->
+      <div class="dock-panel">
+        <div class="tape-strip" style="top: -8px; right: 20px; width: 45px; transform: rotate(2deg);"></div>
+        <div class="dock-panel-header">
+          <div class="dock-panel-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--ink-black);"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Star 增长演进
+          </div>
+          <div class="dock-panel-badge" id="drawer-star-badge">0 / 462 ⭐</div>
+        </div>
+        <div id="echarts-star-box"></div>
+      </div>
+
+      <!-- Real-Time Milestone Feed -->
+      <div class="dock-panel milestone-feed-panel">
+        <div class="tape-strip" style="top: -8px; left: 20px; width: 45px; transform: rotate(-2deg);"></div>
+        <div class="dock-panel-header">
+          <div class="dock-panel-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--red-marker);"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+            核心演进里程碑
+          </div>
+          <div style="font-size: 11px; color: var(--ink-black); font-weight: 800;" id="milestone-counter">0 / 31</div>
+        </div>
+        <div class="milestone-feed-container">
+          <div class="timeline-stream" id="milestone-stream">
+            <!-- Dynamically injected timeline items (newest on top) -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Dynamic Contributor Floating Drawer -->
+    <div class="contributors-drawer" id="contributors-drawer">
+      <div class="tape-strip" style="top: -8px; left: 50%; transform: translateX(-50%) rotate(1deg); width: 60px;"></div>
+      <div class="contrib-header">
+        <div class="contrib-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--red-marker);"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+          贡献者动态排行榜
+        </div>
+        <div class="contrib-lru-tag">⚡ 热度竞速</div>
+      </div>
+      <div class="contrib-list" id="contrib-list">
+        <!-- Injected dynamically with smooth ranking animation -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Toolbar -->
+  <footer>
+    <button class="btn-action primary" id="btn-play">
+      <span id="play-icon">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </span>
+      <span id="play-text">播放</span>
+    </button>
+    <button class="btn-action" id="btn-restart">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      重置
+    </button>
+
+    <div class="timeline-wrapper">
+      <input type="range" class="timeline-slider" id="time-slider" min="0" max="1000" value="0">
+    </div>
+
+    <div class="speed-pills">
+      <div class="speed-pill" data-speed="0.5">0.5x</div>
+      <div class="speed-pill active" data-speed="1.0">1.0x</div>
+      <div class="speed-pill" data-speed="2.0">2.0x</div>
+      <div class="speed-pill" data-speed="4.0">4.0x</div>
+      <div class="speed-pill" data-speed="8.0">8.0x</div>
+    </div>
+
+    <button class="btn-action" id="btn-record">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      录制视频
+    </button>
+
+    <button class="btn-action" id="btn-fullscreen">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      全屏
+    </button>
+  </footer>
+
+  <script>
+    // -------------------------------------------------------------
+    // Repository Visualizer Engine (Hand-Drawn Doodle Style)
+    // -------------------------------------------------------------
+    const data = window.REPO_DATA;
+    if (!data) alert("未检测到 visualizer_data.js 数据！");
+
+    if (data && data.project) {
+      if (data.project.name && document.getElementById("brand-title")) {
+        document.getElementById("brand-title").textContent = data.project.name;
+        document.title = `${data.project.name} - Evolution Visualizer`;
+      }
+      if (data.project.repo && document.getElementById("brand-repo")) {
+        document.getElementById("brand-repo").textContent = data.project.repo;
+      }
+    }
+
+    const canvas = document.getElementById("viewport");
+    const ctx = canvas.getContext("2d");
+
+    let width, height;
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      canvas.width = width * window.devicePixelRatio;
+      canvas.height = height * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    resizeCanvas();
+    window.addEventListener("resize", () => {
+      resizeCanvas();
+      if (echartInstance) echartInstance.resize();
+    });
+
+    // Avatar & Logo Preloader (100% Inlined Origin-Clean Data URIs)
+    const avatarImages = {};
+    for (const [login, b64] of Object.entries(data.avatars || {})) {
+      const img = new Image();
+      img.src = b64;
+      avatarImages[login] = img;
+    }
+    const logoImage = new Image();
+    if (data.logo) {
+      logoImage.src = data.logo;
+    } else {
+      logoImage.src = "logo.png";
+    }
+
+    // -------------------------------------------------------------
+    // Architectural Clustered Modules (Pure Hand-Drawn Cards, NO Emojis)
+    // -------------------------------------------------------------
+    const MODULE_CLUSTERS = [
+      { id: "app", name: "应用调度", x: -170, y: -90, color: "#4ecdc4" },
+      { id: "domain", name: "分析引擎", x: 170, y: -90, color: "#ff6b6b" },
+      { id: "templates", name: "主题系统", x: 200, y: 110, color: "#ffd93d" },
+      { id: "platform", name: "平台适配", x: -200, y: 110, color: "#4ecdc4" },
+      { id: "infra", name: "基础设施", x: 0, y: 190, color: "#ff6b6b" },
+      { id: "docs", name: "文档配置", x: 0, y: -190, color: "#ffd93d" }
+    ];
+
+    function mapFileToModule(filePath) {
+      if (!filePath || typeof filePath !== "string") return MODULE_CLUSTERS[0];
+      const lower = filePath.toLowerCase();
+      if (lower.includes("analyzer") || lower.includes("domain") || lower.includes("model") || lower.includes("sentiment") || lower.includes("summary")) return MODULE_CLUSTERS[1];
+      if (lower.includes("template") || lower.includes("theme") || lower.includes("hatsunemiku") || lower.includes("bluearchive") || lower.includes("atri") || lower.includes("html") || lower.includes("css")) return MODULE_CLUSTERS[2];
+      if (lower.includes("platform") || lower.includes("adapter") || lower.includes("telegram") || lower.includes("onebot") || lower.includes("qq")) return MODULE_CLUSTERS[3];
+      if (lower.includes("persistence") || lower.includes("scheduler") || lower.includes("infrastructure") || lower.includes("db") || lower.includes("storage") || lower.includes("util")) return MODULE_CLUSTERS[4];
+      if (lower.includes("doc") || lower.endsWith(".md") || lower.endsWith(".json") || lower.endsWith(".yaml") || lower.endsWith(".toml") || lower.endsWith(".txt")) return MODULE_CLUSTERS[5];
+      return MODULE_CLUSTERS[0];
+    }
+
+    // Spark Particles upon commit (Hand-drawn marker sparkles)
+    class SparkParticle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 25 + Math.random() * 55;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.color = color;
+        this.life = 1.0;
+        this.size = 2.5 + Math.random() * 2;
+      }
+      update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.life -= dt * 2.5;
+      }
+      draw(c) {
+        if (this.life <= 0) return;
+        c.save();
+        c.fillStyle = this.color;
+        c.strokeStyle = "#2c2c2c";
+        c.lineWidth = 1;
+        c.globalAlpha = Math.max(0, this.life);
+        c.beginPath();
+        c.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        c.fill();
+        c.stroke();
+        c.restore();
+      }
+    }
+    const sparkParticles = [];
+
+    // Persistent Dynamic File Dot (Natural Sunflower Phyllotaxis Cluster)
+    class ActiveFilePill {
+      constructor(path, mod, slotIndex = 0) {
+        this.path = path || "main.py";
+        this.name = this.path.split("/").pop() || "main.py";
+        this.mod = mod || MODULE_CLUSTERS[0];
+        this.slotIndex = slotIndex;
+        
+        // Natural sunflower phyllotaxis cluster (Uniform 2D organic distribution, zero spiral arms)
+        const phi = 1.61803398875;
+        const r = 16 + Math.sqrt(slotIndex) * 7.5;
+        const theta = slotIndex * 2 * Math.PI * (1 - 1 / phi);
+        this.x = this.mod.x + Math.cos(theta) * r;
+        this.y = this.mod.y + Math.sin(theta) * r;
+        
+        this.color = this.mod.color;
+        this.alpha = 1.0;
+        this.pulseVal = 1.0;
+        this.pulseColor = "#4ecdc4";
+        this.locAdded = 0;
+        this.locDeleted = 0;
+      }
+
+      pulse(action, added = 0, deleted = 0) {
+        this.alpha = 1.0;
+        this.pulseVal = 1.0;
+        const safeAdd = Number(added) || 0;
+        const safeDel = Number(deleted) || 0;
+        this.locAdded += safeAdd;
+        this.locDeleted += safeDel;
+        this.pulseColor = safeDel > safeAdd ? "#ff6b6b" : safeAdd > safeDel ? "#4ecdc4" : "#ffd93d";
+
+        // Spawn 4 doodle sparks
+        for (let i = 0; i < 4; i++) {
+          sparkParticles.push(new SparkParticle(this.x, this.y, this.pulseColor));
+        }
+      }
+    }
+
+    // Developer Actor (Outer Celestial Ring with Dynamic Commit Swoop)
+    class DeveloperActor {
+      constructor(login, firstCommitTime, index, total) {
+        this.login = login;
+        this.firstCommitTime = firstCommitTime;
+        this.isJoined = false;
+        this.spawnScale = 0;
+        this.spawnRipple = 0;
+        this.commitsCount = 0;
+        this.locAdded = 0;
+        this.locDeleted = 0;
+        this.lruHeat = 0;
+        this.pulseScale = 1.0;
+
+        // Clean 360° celestial ring distribution (double staggered radius)
+        this.slotAngle = (index / Math.max(1, total)) * Math.PI * 2;
+        this.homeRadius = 345 + (index % 2 === 0 ? 0 : 32);
+        this.homeX = Math.cos(this.slotAngle) * this.homeRadius;
+        this.homeY = Math.sin(this.slotAngle) * this.homeRadius;
+
+        this.x = this.homeX;
+        this.y = this.homeY;
+        this.targetX = this.homeX;
+        this.targetY = this.homeY;
+
+        this.laserTarget = null;
+        this.laserProgress = 0;
+        this.laserColor = "#ff6b6b";
+        this.activeTimer = 0;
+      }
+
+      touchCommit(added, deleted, targetPill) {
+        this.commitsCount++;
+        const safeAdd = Number(added) || 0;
+        const safeDel = Number(deleted) || 0;
+        this.locAdded += safeAdd;
+        this.locDeleted += safeDel;
+        this.lruHeat += 120 + Math.min(180, (safeAdd + safeDel) / 40);
+
+        this.pulseScale = 1.35; // pop animation
+        this.laserTarget = targetPill;
+        this.laserProgress = 1.0;
+        this.laserColor = safeDel > safeAdd ? "#ff6b6b" : safeAdd > safeDel ? "#4ecdc4" : "#ffd93d";
+        this.activeTimer = 1.2; // active swoop duration
+
+        // Swiftly swoop into the center to the modified file node!
+        if (targetPill) {
+          const spread = Math.random() * Math.PI * 2;
+          const dist = 32 + Math.random() * 16;
+          this.targetX = targetPill.x + Math.cos(spread) * dist;
+          this.targetY = targetPill.y + Math.sin(spread) * dist;
+        }
+      }
+
+      update(delta, simTime, globalAngle) {
+        if (!this.isJoined) {
+          if (simTime >= this.firstCommitTime) {
+            this.isJoined = true;
+            this.spawnRipple = 1.0;
+          }
+        }
+
+        if (this.isJoined) {
+          if (this.spawnScale < 1.0) {
+            this.spawnScale = Math.min(1.0, this.spawnScale + delta * 3.0);
+          }
+          if (this.spawnRipple > 0) {
+            this.spawnRipple = Math.max(0, this.spawnRipple - delta * 1.5);
+          }
+        }
+
+        if (this.pulseScale > 1.0) {
+          this.pulseScale = Math.max(1.0, this.pulseScale - delta * 2.0);
+        }
+
+        // Calculate rotating celestial home slot
+        const currentAngle = this.slotAngle + globalAngle;
+        this.homeX = Math.cos(currentAngle) * this.homeRadius;
+        this.homeY = Math.sin(currentAngle) * this.homeRadius;
+
+        // Return to home outer ring position when idle
+        if (this.activeTimer > 0) {
+          this.activeTimer -= delta;
+          if (this.activeTimer <= 0) {
+            this.targetX = this.homeX;
+            this.targetY = this.homeY;
+          }
+        } else {
+          this.targetX = this.homeX;
+          this.targetY = this.homeY;
+        }
+
+        // Smooth spring physics toward target
+        const ease = this.activeTimer > 0 ? 0.14 : 0.06;
+        this.x += (this.targetX - this.x) * ease;
+        this.y += (this.targetY - this.y) * ease;
+
+        if (this.laserProgress > 0) {
+          this.laserProgress -= 0.035;
+          if (this.laserProgress <= 0) this.laserTarget = null;
+        }
+
+        this.lruHeat = Math.max(0, this.lruHeat * Math.exp(-delta * 0.8));
+      }
+    }
+
+    // State Variables
+    const developers = new Map();
+    const activeFilePills = new Map();
+    const moduleFilesCount = new Map(); // module.id -> count
+    let currentCommitIndex = 0;
+    let isPlaying = false;
+    let playbackSpeed = 1.0;
+    let lastFrameTime = performance.now();
+    let globalOrbitAngle = 0;
+    let currentSimTime = data.commits[0] ? data.commits[0].timestamp : 0;
+    const startSimTime = currentSimTime;
+    const endSimTime = data.commits[data.commits.length - 1] ? data.commits[data.commits.length - 1].timestamp : currentSimTime;
+    const totalSimDuration = Math.max(1, endSimTime - startSimTime);
+
+    const authorFirstCommits = {};
+    data.commits.forEach(c => {
+      if (!authorFirstCommits[c.author]) {
+        authorFirstCommits[c.author] = c.timestamp;
+      }
+    });
+
+    data.contributors.forEach((login, idx) => {
+      const firstTs = authorFirstCommits[login] || startSimTime;
+      developers.set(login, new DeveloperActor(login, firstTs, idx, data.contributors.length));
+    });
+
+    let currentActivePill = null;
+    const camera = { x: 0, y: 0, zoom: 0.85, isDragging: false, dragStartX: 0, dragStartY: 0 };
+
+    // UI Bindings
+    const dateDisplay = document.getElementById("date-display");
+    const starDisplay = document.getElementById("star-display");
+    const commitsDisplay = document.getElementById("commits-display");
+    const locAddDisplay = document.getElementById("loc-add-display");
+    const locDelDisplay = document.getElementById("loc-del-display");
+    const contribList = document.getElementById("contrib-list");
+    const btnToggleEcharts = document.getElementById("btn-toggle-echarts");
+    const contributorsDrawer = document.getElementById("contributors-drawer");
+    const btnToggleContrib = document.getElementById("btn-toggle-contrib");
+    const drawerStarBadge = document.getElementById("drawer-star-badge");
+    const timeSlider = document.getElementById("time-slider");
+    const btnPlay = document.getElementById("btn-play");
+    const playIcon = document.getElementById("play-icon");
+    const playText = document.getElementById("play-text");
+    const btnRestart = document.getElementById("btn-restart");
+    const btnRecord = document.getElementById("btn-record");
+    const btnFullscreen = document.getElementById("btn-fullscreen");
+    const hudAuthor = document.getElementById("hud-author");
+    const hudMsg = document.getElementById("hud-msg");
+
+    const leftDock = document.querySelector(".left-dock");
+    btnToggleEcharts.addEventListener("click", () => {
+      btnToggleEcharts.classList.toggle("active");
+      if (leftDock) {
+        leftDock.style.display = leftDock.style.display === "none" ? "flex" : "none";
+        if (echartInstance) setTimeout(() => echartInstance.resize(), 50);
+      }
+    });
+
+    btnToggleContrib.addEventListener("click", () => {
+      btnToggleContrib.classList.toggle("active");
+      contributorsDrawer.classList.toggle("collapsed");
+    });
+
+    const milestoneStream = document.getElementById("milestone-stream");
+    const milestoneCounter = document.getElementById("milestone-counter");
+
+    // Tag Color Classifier
+    function getTagClass(tag) {
+      if (!tag) return "tag-feature";
+      if (tag.includes("一周年")) return "tag-anniversary";
+      if (tag.includes("开源") || tag.includes("立项")) return "tag-open-source";
+      if (tag.includes("社区") || tag.includes("Star")) return "tag-community";
+      if (tag.includes("重磅")) return "tag-core-feature";
+      if (tag.includes("主题") || tag.includes("界面")) return "tag-theme";
+      if (tag.includes("画力") || tag.includes("画质")) return "tag-art";
+      if (tag.includes("平台") || tag.includes("官方") || tag.includes("多号")) return "tag-platform";
+      if (tag.includes("趣味") || tag.includes("网页")) return "tag-fun";
+      if (tag.includes("优化") || tag.includes("性能") || tag.includes("归档")) return "tag-optimize";
+      if (tag.includes("功能")) return "tag-feature";
+      return "tag-feature";
+    }
+
+    function showMilestone(ms, idx = 0) {
+      if (!milestoneStream) return;
+
+      const dt = new Date(ms.timestamp * 1000);
+      const dateStr = `${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')}`;
+      const tagClass = getTagClass(ms.tag);
+
+      const item = document.createElement("div");
+      item.className = "milestone-node highlight";
+      item.innerHTML = `
+        <div class="node-header">
+          <span class="node-tag ${tagClass}">${ms.tag}</span>
+          <span class="node-date">${dateStr}</span>
+        </div>
+        <div class="node-title">${ms.title}</div>
+        <div class="node-desc">${ms.desc}</div>
+      `;
+
+      setTimeout(() => {
+        item.classList.remove("highlight");
+      }, 2500);
+
+      milestoneStream.insertBefore(item, milestoneStream.firstChild);
+
+      if (milestoneCounter) {
+        milestoneCounter.textContent = `${idx + 1} / ${data.milestones.length}`;
+      }
+    }
+
+    function resetMilestones() {
+      if (milestoneStream) milestoneStream.innerHTML = "";
+      if (milestoneCounter) milestoneCounter.textContent = `0 / ${data.milestones.length}`;
+    }
+
+    // -------------------------------------------------------------
+    // ECharts Star History (Hand-Drawn Doodle Palette & Dashed Lines)
+    // -------------------------------------------------------------
+    let echartInstance = null;
+    let allStarDataPoints = [];
+
+    const ALL_STAR_MILESTONES = [
+      { name: "25 Stars", value: 25, coord: ['2025-09-24', 25] },
+      { name: "100 Stars", value: 100, coord: ['2025-12-29', 100] },
+      { name: "200 Stars", value: 200, coord: ['2026-03-13', 200] },
+      { name: "300 Stars", value: 300, coord: ['2026-04-18', 300] },
+      { name: "400 Stars", value: 400, coord: ['2026-07-07', 400] },
+      { name: "462 Stars", value: 462, coord: ['2026-08-24', 462] }
+    ];
+
+    function initECharts() {
+      const dom = document.getElementById("echarts-star-box");
+      if (!dom) return;
+      echartInstance = echarts.init(dom, null, { renderer: "canvas" });
+
+      allStarDataPoints = data.stars.map(s => {
+        const dt = new Date(s.timestamp * 1000);
+        return [
+          `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`,
+          s.count,
+          s.user,
+          s.timestamp
+        ];
+      });
+
+      const option = {
+        grid: { left: 45, right: 30, top: 30, bottom: 25 },
+        animationDuration: 150,
+        tooltip: {
+          trigger: "axis",
+          formatter: params => {
+            if (!params || !params[0]) return "";
+            const p = params[0];
+            return `📅 ${p.data[0]}<br/>⭐ 累计 Stars: <strong>${p.data[1]}</strong><br/>👤 Stargazer: @${p.data[2] || 'community'}`;
+          }
+        },
+        xAxis: {
+          type: "time",
+          min: '2025-08-24',
+          max: '2026-08-24',
+          axisLine: { lineStyle: { color: "#2c2c2c", type: "dashed", width: 1.5 } },
+          axisLabel: { color: "#2c2c2c", fontSize: 10, fontWeight: "bold" }
+        },
+        yAxis: {
+          type: "value",
+          min: 0,
+          max: 462,
+          splitLine: { lineStyle: { color: "#e9e7db", type: "dashed" } },
+          axisLabel: { color: "#2c2c2c", fontSize: 10, fontWeight: "bold" }
+        },
+        series: [{
+          name: "GitHub Stars",
+          type: "line",
+          smooth: 0.3,
+          showSymbol: false,
+          data: [],
+          lineStyle: { color: "#2c2c2c", width: 2.5, type: "dashed" },
+          areaStyle: {
+            color: "rgba(255, 217, 61, 0.4)"
+          },
+          markPoint: {
+            symbol: "pin",
+            symbolSize: 28,
+            itemStyle: { color: "#ff6b6b", borderColor: "#2c2c2c", borderWidth: 1.5 },
+            label: { fontSize: 8, color: "#fff", fontWeight: "bold" },
+            data: []
+          },
+          markLine: {
+            symbol: ['none', 'none'],
+            animation: false,
+            label: {
+              show: true,
+              position: 'insideEndTop',
+              formatter: '{c} ⭐',
+              fontSize: 10,
+              fontWeight: 'bold',
+              color: '#2c2c2c'
+            },
+            lineStyle: {
+              color: '#ff6b6b',
+              type: 'dashed',
+              width: 1.8
+            },
+            data: []
+          }
+        }]
+      };
+
+      echartInstance.setOption(option);
+      updateEChartsProgress();
+    }
+
+    setTimeout(initECharts, 50);
+
+    let lastEChartsUpdate = 0;
+    function updateEChartsProgress(force = false) {
+      if (!echartInstance) return;
+      const now = performance.now();
+      if (!force && now - lastEChartsUpdate < 100) return;
+      lastEChartsUpdate = now;
+
+      const visiblePoints = allStarDataPoints.filter(p => p[3] <= currentSimTime);
+      const currentStarCount = visiblePoints.length > 0 ? visiblePoints[visiblePoints.length - 1][1] : 0;
+      starDisplay.textContent = `${currentStarCount} Stars`;
+      if (drawerStarBadge) {
+        drawerStarBadge.textContent = `${currentStarCount} / 462 ⭐`;
+      }
+
+      const activeMilestones = ALL_STAR_MILESTONES.filter(m => currentStarCount >= m.value);
+
+      const markLineData = currentStarCount > 0 ? [{
+        yAxis: currentStarCount,
+        value: currentStarCount
+      }] : [];
+
+      echartInstance.setOption({
+        series: [{
+          data: visiblePoints.map(p => [p[0], p[1]]),
+          markPoint: {
+            data: activeMilestones
+          },
+          markLine: {
+            data: markLineData
+          }
+        }]
+      });
+    }
+
+    // -------------------------------------------------------------
+    // Simulation Processing with Persistent Natural File Dots
+    // -------------------------------------------------------------
+    let lastMilestoneIndex = -1;
+
+    function processSimulationStep(dtSeconds) {
+      if (currentSimTime >= endSimTime) {
+        isPlaying = false;
+        playText.textContent = "播放";
+        playIcon.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+        return;
+      }
+
+      const simSpeedRate = (totalSimDuration / 80.0) * playbackSpeed;
+      currentSimTime += dtSeconds * simSpeedRate;
+
+      while (currentCommitIndex < data.commits.length && data.commits[currentCommitIndex].timestamp <= currentSimTime) {
+        const c = data.commits[currentCommitIndex];
+        const dev = developers.get(c.author);
+
+        let commitAdded = 0;
+        let commitDeleted = 0;
+        let primaryPill = null;
+        let maxChanges = -1;
+
+        if (c.files && Array.isArray(c.files) && c.files.length > 0) {
+          for (const f of c.files) {
+            const adds = Number(f.additions) || 0;
+            const dels = Number(f.deletions) || 0;
+            commitAdded += adds;
+            commitDeleted += dels;
+            const mod = mapFileToModule(f.path);
+            
+            let pill = activeFilePills.get(f.path);
+            if (!pill) {
+              const currentCount = moduleFilesCount.get(mod.id) || 0;
+              moduleFilesCount.set(mod.id, currentCount + 1);
+              pill = new ActiveFilePill(f.path, mod, currentCount);
+              activeFilePills.set(f.path, pill);
+            }
+
+            const action = dels > 0 && adds === 0 ? "D" : adds > 0 && dels === 0 ? "A" : "M";
+            pill.pulse(action, adds, dels);
+            if (adds + dels > maxChanges) {
+              maxChanges = adds + dels;
+              primaryPill = pill;
+            }
+          }
+        } else {
+          const defaultPath = "astrbot_plugin_qq_group_daily_analysis/main.py";
+          const mod = mapFileToModule(defaultPath);
+          let pill = activeFilePills.get(defaultPath);
+          if (!pill) {
+            const currentCount = moduleFilesCount.get(mod.id) || 0;
+            moduleFilesCount.set(mod.id, currentCount + 1);
+            pill = new ActiveFilePill(defaultPath, mod, currentCount);
+            activeFilePills.set(defaultPath, pill);
+          }
+          pill.pulse("M", 5, 0);
+          primaryPill = pill;
+        }
+
+        currentActivePill = primaryPill;
+
+        if (dev) {
+          dev.touchCommit(commitAdded, commitDeleted, primaryPill);
+        }
+
+        const dateObj = new Date(c.timestamp * 1000);
+        dateDisplay.textContent = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`;
+        commitsDisplay.textContent = `${currentCommitIndex + 1} 提交`;
+
+        if (hudAuthor && hudMsg) {
+          hudAuthor.textContent = `@${c.author} · ${c.hash}`;
+          hudMsg.textContent = c.message || `更新了 ${c.files ? c.files.length : 1} 个文件`;
+        }
+
+        currentCommitIndex++;
+      }
+
+      for (let i = lastMilestoneIndex + 1; i < data.milestones.length; i++) {
+        if (data.milestones[i].timestamp <= currentSimTime) {
+          showMilestone(data.milestones[i], i);
+          lastMilestoneIndex = i;
+        } else {
+          break;
+        }
+      }
+
+      const progress = Math.min(1000, Math.max(0, ((currentSimTime - startSimTime) / totalSimDuration) * 1000));
+      if (!camera.isDragging) {
+        timeSlider.value = progress;
+      }
+    }
+
+    // -------------------------------------------------------------
+    // Contributor Dynamic Leaderboard Builder (Doodle Style)
+    // -------------------------------------------------------------
+    function updateContribDrawer() {
+      if (!contribList) return;
+
+      let totalAdd = 0;
+      let totalDel = 0;
+      developers.forEach(d => {
+        totalAdd += (Number(d.locAdded) || 0);
+        totalDel += (Number(d.locDeleted) || 0);
+      });
+      locAddDisplay.textContent = `+${totalAdd.toLocaleString()} 行`;
+      locDelDisplay.textContent = `-${totalDel.toLocaleString()} 行`;
+
+      const isNearEnd = (endSimTime - currentSimTime) < 5;
+      const allDevs = Array.from(developers.values()).sort((a, b) => {
+        if (a.isJoined !== b.isJoined) {
+          return a.isJoined ? -1 : 1;
+        }
+        if (isNearEnd) {
+          return (b.locAdded + b.commitsCount * 100) - (a.locAdded + a.commitsCount * 100);
+        }
+        const scoreA = a.lruHeat * 2.0 + (a.locAdded + a.commitsCount * 100) * 0.2;
+        const scoreB = b.lruHeat * 2.0 + (b.locAdded + b.commitsCount * 100) * 0.2;
+        return scoreB - scoreA;
+      });
+
+      const joinedCount = allDevs.filter(d => d.isJoined).length;
+      const tagElem = document.querySelector(".contrib-lru-tag");
+      if (tagElem) {
+        tagElem.textContent = `已加入 ${joinedCount}/${developers.size} 位开发者`;
+      }
+
+      contribList.innerHTML = "";
+      allDevs.forEach((dev, idx) => {
+        const row = document.createElement("div");
+        row.className = "contrib-row";
+        if (!dev.isJoined) {
+          row.style.opacity = "0.35";
+          row.style.filter = "grayscale(100%)";
+        } else if (dev.lruHeat > 150) {
+          row.classList.add("heat-active");
+        }
+
+        const rankClass = idx === 0 ? "rank-gold" : idx === 1 ? "rank-silver" : idx === 2 ? "rank-bronze" : "";
+        const rankLabel = dev.isJoined ? (idx === 0 ? "1" : idx === 1 ? "2" : idx === 2 ? "3" : `${idx+1}`) : "—";
+        const avatarB64 = data.avatars[dev.login] || "";
+
+        let sprintBadge = "";
+        if (!dev.isJoined) {
+          sprintBadge = `<span style="font-size:10px; opacity:0.6;">待加入</span>`;
+        } else if (dev.lruHeat > 150) {
+          sprintBadge = `<span class="contrib-sprint-badge">🔥 活跃</span>`;
+        }
+
+        row.innerHTML = `
+          <div class="contrib-rank-num ${rankClass}">${rankLabel}</div>
+          <div class="contrib-avatar" style="background-image: url('${avatarB64}');"></div>
+          <div class="contrib-meta">
+            <div class="contrib-username">
+              <span>@${dev.login}</span>
+              ${sprintBadge}
+            </div>
+            <div class="contrib-stats">
+              <span class="c-add">+${(dev.locAdded || 0).toLocaleString()}</span>
+              <span class="c-del">-${(dev.locDeleted || 0).toLocaleString()}</span>
+              <span class="c-cmt">${dev.commitsCount} 提交</span>
+            </div>
+          </div>
+        `;
+        contribList.appendChild(row);
+      });
+    }
+
+    // -------------------------------------------------------------
+    // Render Canvas Stage (Hand-Drawn Doodle Architecture)
+    // -------------------------------------------------------------
+    function render() {
+      // 0. Fill Solid Warm Paper Background (Fixes transparent black in video recording!)
+      ctx.fillStyle = "#fffef5";
+      ctx.fillRect(0, 0, width, height);
+
+      // Notebook Ruled Lines on Canvas
+      ctx.strokeStyle = "#e9e7db";
+      ctx.lineWidth = 1;
+      const lineGap = 28 * camera.zoom;
+      const startY = (height / 2 + camera.y) % lineGap;
+      for (let y = startY; y < height; y += lineGap) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      ctx.save();
+      ctx.translate(width / 2 + camera.x, height / 2 + camera.y);
+      ctx.scale(camera.zoom, camera.zoom);
+
+      // 1. Draw Connecting Rays from Center to 6 Modules (Dashed Doodle Ink Lines - UNDER LOGO)
+      MODULE_CLUSTERS.forEach(mod => {
+        ctx.strokeStyle = "#2c2c2c";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(mod.x, mod.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      // 2. Draw 6 Module Clusters Box Cards
+      MODULE_CLUSTERS.forEach(mod => {
+        const boxW = 68;
+        const boxH = 24;
+        
+        // Offset Shadow
+        ctx.fillStyle = mod.color;
+        ctx.fillRect(mod.x - boxW / 2 + 2, mod.y - boxH / 2 + 2, boxW, boxH);
+
+        // Card Face
+        ctx.fillStyle = "#fffef5";
+        ctx.strokeStyle = "#2c2c2c";
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([3, 3]);
+        ctx.fillRect(mod.x - boxW / 2, mod.y - boxH / 2, boxW, boxH);
+        ctx.strokeRect(mod.x - boxW / 2, mod.y - boxH / 2, boxW, boxH);
+        ctx.setLineDash([]);
+
+        // Label
+        ctx.font = "bold 11px sans-serif";
+        ctx.fillStyle = "#2c2c2c";
+        ctx.textAlign = "center";
+        ctx.fillText(mod.name, mod.x, mod.y + 4);
+      });
+
+      // 3. Center Core Logo Hub (Drawn ON TOP of connecting lines)
+      const coreR = 24;
+      ctx.save();
+      // Hard Offset Shadow
+      ctx.fillStyle = "#ffd93d";
+      ctx.beginPath();
+      ctx.arc(2.5, 2.5, coreR + 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Core Background & Clip
+      ctx.beginPath();
+      ctx.arc(0, 0, coreR, 0, Math.PI * 2);
+      ctx.fillStyle = "#fffef5";
+      ctx.fill();
+      ctx.clip();
+
+      if (logoImage && (logoImage.complete || logoImage.src)) {
+        try {
+          ctx.drawImage(logoImage, -coreR, -coreR, coreR * 2, coreR * 2);
+        } catch (e) {
+          ctx.fillStyle = "#ffd93d";
+          ctx.fill();
+        }
+      } else {
+        ctx.fillStyle = "#ffd93d";
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Core Outer Dashed Ink Border
+      ctx.save();
+      ctx.strokeStyle = "#2c2c2c";
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(0, 0, coreR + 1, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Core Hand-Drawn Badge Underneath
+      const coreTagW = 56;
+      const coreTagH = 16;
+      ctx.fillStyle = "#ffd93d";
+      ctx.fillRect(-coreTagW / 2 + 1.5, coreR + 4 + 1.5, coreTagW, coreTagH);
+
+      ctx.fillStyle = "#fffef5";
+      ctx.strokeStyle = "#2c2c2c";
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([2, 2]);
+      ctx.fillRect(-coreTagW / 2, coreR + 4, coreTagW, coreTagH);
+      ctx.strokeRect(-coreTagW / 2, coreR + 4, coreTagW, coreTagH);
+      ctx.setLineDash([]);
+
+      ctx.font = "bold 9.5px sans-serif";
+      ctx.fillStyle = "#2c2c2c";
+      ctx.textAlign = "center";
+      ctx.fillText("插件内核", 0, coreR + 15.5);
+      ctx.restore();
+
+      // 3. Draw Persistent File Dots around their Module Cluster
+      for (const [path, pill] of activeFilePills.entries()) {
+        ctx.save();
+        ctx.fillStyle = pill.color;
+        ctx.strokeStyle = "#2c2c2c";
+        ctx.lineWidth = 1.4;
+        ctx.globalAlpha = Math.max(0.35, Math.min(1.0, pill.alpha));
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.arc(pill.x, pill.y, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Pulse ring on edit
+        if (pill.pulseVal > 0) {
+          ctx.strokeStyle = pill.pulseColor;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(pill.x, pill.y, 4.5 + 16 * (1 - pill.pulseVal), 0, Math.PI * 2);
+          ctx.stroke();
+          pill.pulseVal = Math.max(0, pill.pulseVal - 0.03);
+        }
+        ctx.restore();
+      }
+
+      // 4. Draw neat micro file tags for all currently active/pulsing files across all partitions
+      for (const [path, pill] of activeFilePills.entries()) {
+        if (pill.pulseVal > 0.05) {
+          ctx.save();
+          ctx.font = "bold 10px sans-serif";
+          const txt = pill.name;
+          const metrics = ctx.measureText(txt);
+          const pillW = metrics.width + 10;
+          const pillH = 16;
+          const textAlpha = Math.min(1.0, pill.pulseVal * 1.6);
+          ctx.globalAlpha = textAlpha;
+
+          // Micro offset shadow
+          ctx.fillStyle = pill.pulseColor || "#ffd93d";
+          ctx.fillRect(pill.x - pillW / 2 + 1, pill.y - pillH - 4 + 1, pillW, pillH);
+
+          // Micro tag face
+          ctx.fillStyle = "#fffef5";
+          ctx.strokeStyle = "#2c2c2c";
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([2, 2]);
+          ctx.fillRect(pill.x - pillW / 2, pill.y - pillH - 4, pillW, pillH);
+          ctx.strokeRect(pill.x - pillW / 2, pill.y - pillH - 4, pillW, pillH);
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = "#2c2c2c";
+          ctx.textAlign = "center";
+          ctx.fillText(txt, pill.x, pill.y - 8);
+          ctx.restore();
+        }
+      }
+
+      // 5. Draw Code Spark Particles
+      sparkParticles.forEach(p => p.draw(ctx));
+
+      // 6. Draw Laser Energy Beams (Doodle Wavy Marker Connection)
+      developers.forEach(dev => {
+        if (dev.laserTarget && dev.laserProgress > 0) {
+          ctx.save();
+          ctx.strokeStyle = dev.laserColor;
+          ctx.lineWidth = 2.5 * dev.laserProgress;
+          ctx.globalAlpha = dev.laserProgress;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.moveTo(dev.x, dev.y);
+          ctx.lineTo(dev.laserTarget.x, dev.laserTarget.y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      });
+
+      // 7. Draw Developer Avatars (Doodle Style in 360° Ring)
+      developers.forEach(dev => {
+        if (!dev.isJoined || dev.spawnScale <= 0) return;
+        ctx.save();
+        ctx.translate(dev.x, dev.y);
+        ctx.scale(dev.spawnScale * dev.pulseScale, dev.spawnScale * dev.pulseScale);
+
+        const avImg = avatarImages[dev.login];
+        const r = 14;
+
+        // Hard Offset Badge Shadow
+        ctx.fillStyle = "#4ecdc4";
+        ctx.beginPath();
+        ctx.arc(2.5, 2.5, r + 1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Expanding spawn ripple when joining
+        if (dev.spawnRipple > 0) {
+          ctx.strokeStyle = "#ff6b6b";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([3, 3]);
+          ctx.globalAlpha = dev.spawnRipple;
+          ctx.beginPath();
+          ctx.arc(0, 0, r + 24 * (1 - dev.spawnRipple), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1.0;
+        }
+
+        // Avatar Clip
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.clip();
+        if (avImg && avImg.complete) {
+          ctx.drawImage(avImg, -r, -r, r * 2, r * 2);
+        } else {
+          ctx.fillStyle = "#fffef5";
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Dashed Ring Border
+        ctx.save();
+        ctx.translate(dev.x, dev.y);
+        ctx.scale(dev.spawnScale * dev.pulseScale, dev.spawnScale * dev.pulseScale);
+        ctx.strokeStyle = dev.laserProgress > 0 ? dev.laserColor : "#2c2c2c";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(0, 0, r + 1, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        // Developer Name (Ink Black)
+        ctx.save();
+        ctx.font = "bold 11px sans-serif";
+        ctx.fillStyle = "#2c2c2c";
+        ctx.textAlign = "center";
+        ctx.fillText(dev.login, dev.x, dev.y - 18);
+        ctx.restore();
+      });
+
+      ctx.restore();
+    }
+
+    function loop(now) {
+      const dt = Math.min(0.1, (now - lastFrameTime) / 1000.0);
+      lastFrameTime = now;
+
+      if (isPlaying) {
+        processSimulationStep(dt);
+      }
+
+      // Continuous rotation & animation physics (even when paused or finished)
+      globalOrbitAngle += dt * 0.04;
+
+      // Update particle physics
+      for (let i = sparkParticles.length - 1; i >= 0; i--) {
+        sparkParticles[i].update(dt);
+        if (sparkParticles[i].life <= 0) sparkParticles.splice(i, 1);
+      }
+
+      // Settle active file dots smoothly to base alpha
+      for (const [path, pill] of activeFilePills.entries()) {
+        if (pill.alpha > 0.4) {
+          pill.alpha = Math.max(0.4, pill.alpha - dt * 0.4);
+        }
+      }
+
+      developers.forEach(dev => dev.update(dt, currentSimTime, globalOrbitAngle));
+      updateContribDrawer();
+      updateEChartsProgress();
+
+      render();
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // -------------------------------------------------------------
+    // Controls & Interaction
+    // -------------------------------------------------------------
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      playText.textContent = isPlaying ? "暂停" : "播放";
+      playIcon.innerHTML = isPlaying ?
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>' :
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+    }
+    btnPlay.addEventListener("click", togglePlay);
+
+    function restartSim() {
+      currentCommitIndex = 0;
+      currentSimTime = startSimTime;
+      lastMilestoneIndex = -1;
+      resetMilestones();
+      activeFilePills.clear();
+      moduleFilesCount.clear();
+      sparkParticles.length = 0;
+      currentActivePill = null;
+      developers.forEach(dev => {
+        dev.isJoined = false;
+        dev.spawnScale = 0;
+        dev.commitsCount = 0;
+        dev.locAdded = 0;
+        dev.locDeleted = 0;
+        dev.lruHeat = 0;
+      });
+      updateContribDrawer();
+      updateEChartsProgress(true);
+      if (!isPlaying) togglePlay();
+    }
+    btnRestart.addEventListener("click", restartSim);
+
+    function seekToProgress(val) {
+      const targetTime = startSimTime + (val / 1000.0) * totalSimDuration;
+      currentSimTime = targetTime;
+
+      let idx = 0;
+      while (idx < data.commits.length && data.commits[idx].timestamp <= targetTime) {
+        idx++;
+      }
+      currentCommitIndex = idx;
+
+      activeFilePills.clear();
+      moduleFilesCount.clear();
+      sparkParticles.length = 0;
+      currentActivePill = null;
+      developers.forEach(dev => {
+        dev.commitsCount = 0;
+        dev.locAdded = 0;
+        dev.locDeleted = 0;
+        dev.lruHeat = 0;
+        dev.isJoined = dev.firstCommitTime <= targetTime;
+        dev.spawnScale = dev.isJoined ? 1.0 : 0;
+      });
+
+      for (let i = 0; i < currentCommitIndex; i++) {
+        const c = data.commits[i];
+        const dev = developers.get(c.author);
+        let commitAdded = 0;
+        let commitDeleted = 0;
+        if (c.files && Array.isArray(c.files) && c.files.length > 0) {
+          for (const f of c.files) {
+            const adds = Number(f.additions) || 0;
+            const dels = Number(f.deletions) || 0;
+            commitAdded += adds;
+            commitDeleted += dels;
+            const mod = mapFileToModule(f.path);
+            let pill = activeFilePills.get(f.path);
+            if (!pill) {
+              const currentCount = moduleFilesCount.get(mod.id) || 0;
+              moduleFilesCount.set(mod.id, currentCount + 1);
+              pill = new ActiveFilePill(f.path, mod, currentCount);
+              activeFilePills.set(f.path, pill);
+            }
+          }
+        }
+        if (dev) {
+          dev.commitsCount++;
+          dev.locAdded += commitAdded;
+          dev.locDeleted += commitDeleted;
+        }
+      }
+
+      resetMilestones();
+      lastMilestoneIndex = -1;
+      for (let i = 0; i < data.milestones.length; i++) {
+        if (data.milestones[i].timestamp <= targetTime) {
+          showMilestone(data.milestones[i], i);
+          lastMilestoneIndex = i;
+        } else {
+          break;
+        }
+      }
+
+      if (currentCommitIndex > 0) {
+        const lastCommit = data.commits[currentCommitIndex - 1];
+        const dateObj = new Date(lastCommit.timestamp * 1000);
+        dateDisplay.textContent = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`;
+        commitsDisplay.textContent = `${currentCommitIndex} 提交`;
+      }
+
+      updateContribDrawer();
+      updateEChartsProgress(true);
+    }
+
+    timeSlider.addEventListener("input", (e) => {
+      seekToProgress(parseFloat(e.target.value));
+    });
+
+    document.querySelectorAll(".speed-pill").forEach(pill => {
+      pill.addEventListener("click", () => {
+        document.querySelectorAll(".speed-pill").forEach(p => p.classList.remove("active"));
+        pill.classList.add("active");
+        playbackSpeed = parseFloat(pill.dataset.speed);
+      });
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.code === "ArrowLeft") {
+        timeSlider.value = Math.max(0, parseFloat(timeSlider.value) - 20);
+        seekToProgress(parseFloat(timeSlider.value));
+      } else if (e.code === "ArrowRight") {
+        timeSlider.value = Math.min(1000, parseFloat(timeSlider.value) + 20);
+        seekToProgress(parseFloat(timeSlider.value));
+      }
+    });
+
+    // Canvas Pan & Zoom
+    canvas.addEventListener("mousedown", (e) => {
+      camera.isDragging = true;
+      camera.dragStartX = e.clientX - camera.x;
+      camera.dragStartY = e.clientY - camera.y;
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (camera.isDragging) {
+        camera.x = e.clientX - camera.dragStartX;
+        camera.y = e.clientY - camera.dragStartY;
+      }
+    });
+    window.addEventListener("mouseup", () => {
+      camera.isDragging = false;
+    });
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+      camera.zoom = Math.max(0.35, Math.min(2.5, camera.zoom * zoomFactor));
+    });
+
+    // Fullscreen Toggle
+    btnFullscreen.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+    // HTML5 Canvas Video Recording (Cross-Browser Compatible)
+    function getSupportedMimeType() {
+      const types = [
+        "video/webm;codecs=vp9",
+        "video/webm;codecs=vp8,opus",
+        "video/webm;codecs=vp8",
+        "video/webm",
+        "video/mp4;codecs=h264",
+        "video/mp4"
+      ];
+      for (const t of types) {
+        if (window.MediaRecorder && typeof MediaRecorder.isTypeSupported === "function" && MediaRecorder.isTypeSupported(t)) {
+          return t;
+        }
+      }
+      return "";
+    }
+
+    // Full Webpage / Tab Screen Video Recording
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let currentStream = null;
+
+    async function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+        currentStream = null;
+      }
+      btnRecord.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> 录制整页视频';
+      btnRecord.classList.remove("primary");
+    }
+
+    async function startRecording() {
+      recordedChunks = [];
+      try {
+        let stream = null;
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+          try {
+            stream = await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                displaySurface: "browser",
+                frameRate: 60,
+                width: { ideal: 3840, max: 3840 },
+                height: { ideal: 2160, max: 2160 }
+              },
+              audio: false,
+              preferCurrentTab: true,
+              selfBrowserSurface: "include"
+            });
+          } catch (e) {
+            console.log("Tab capture dismissed or fallback to canvas:", e);
+          }
+        }
+
+        if (!stream) {
+          if (canvas.captureStream) {
+            stream = canvas.captureStream(60);
+          } else if (canvas.mozCaptureStream) {
+            stream = canvas.mozCaptureStream(60);
+          }
+        }
+
+        if (!stream) {
+          alert("无法获取屏幕或 Canvas 录制流");
+          return;
+        }
+
+        currentStream = stream;
+        const mimeType = getSupportedMimeType();
+        const options = Object.assign({ videoBitsPerSecond: 25000000 }, mimeType ? { mimeType } : {});
+        mediaRecorder = new MediaRecorder(stream, options);
+
+        if (stream.getVideoTracks && stream.getVideoTracks()[0]) {
+          stream.getVideoTracks()[0].onended = () => {
+            stopRecording();
+          };
+        }
+
+        mediaRecorder.ondataavailable = e => {
+          if (e.data && e.data.size > 0) {
+            recordedChunks.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const finalMime = mediaRecorder.mimeType || mimeType || "video/webm";
+          const ext = finalMime.includes("mp4") ? "mp4" : "webm";
+          const blob = new Blob(recordedChunks, { type: finalMime });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = `astrbot_plugin_fullpage_evolution_${Date.now()}.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 1000);
+        };
+
+        mediaRecorder.start(1000);
+        btnRecord.innerHTML = '<span style="color: #ff6b6b; font-weight: 800;">● 停止录制</span>';
+        btnRecord.classList.add("primary");
+
+        // Automatically reset to start and play from beginning!
+        restartSim();
+      } catch (err) {
+        console.error("Recording failed:", err);
+        alert("录制启动失败: " + err.message);
+      }
+    }
+
+    btnRecord.addEventListener("click", () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+
+    // Auto-start playback
+    setTimeout(() => {
+      if (!isPlaying) togglePlay();
+    }, 400);
+  </script>
+</body>
+</html>
