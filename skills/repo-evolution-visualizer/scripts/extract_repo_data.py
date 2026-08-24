@@ -294,22 +294,46 @@ def fetch_contributor_avatars(contributors: list, cache_dir: Path) -> dict:
     print(f"  [+] Encoded {len(avatars_b64)} avatars as inline Base64 data URIs.")
     return avatars_b64
 
-def find_and_encode_logo(repo_dir: Path) -> str:
-    """Search for repository logo and convert to Base64 Data URI."""
+def find_and_encode_logo(repo_dir: Path, github_repo: str = "", cache_dir: Path = None, token: str = None) -> str:
+    """Acquire repository logo with priority: GitHub Org/Repo Avatar -> Local logo file -> Fallback."""
+    # 1. Priority 1: Fetch GitHub Repository/Organization Avatar
+    if github_repo and cache_dir:
+        owner = github_repo.split("/")[0] if "/" in github_repo else github_repo
+        gh_logo_path = cache_dir / f"logo_gh_{owner}.png"
+        if not gh_logo_path.exists():
+            url = f"https://github.com/{owner}.png?size=200"
+            try:
+                headers = {"User-Agent": "Mozilla/5.0"}
+                if token:
+                    headers["Authorization"] = f"token {token}"
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    gh_logo_path.write_bytes(resp.read())
+            except Exception as e:
+                print(f"  [-] GitHub avatar fetch notice: {e}", file=sys.stderr)
+
+        if gh_logo_path.exists() and gh_logo_path.stat().st_size > 0:
+            data = gh_logo_path.read_bytes()
+            print(f"  [+] Using GitHub repository owner avatar for: '{owner}'")
+            return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+
+    # 2. Priority 2: Local explicit logo file
     logo_candidates = [
         repo_dir / "logo.png",
         repo_dir / "logo.jpg",
         repo_dir / "logo.svg",
         repo_dir / "assets" / "logo.png",
         repo_dir / "docs" / "public" / "logo.png",
-        repo_dir / "docs" / "logo.png"
+        repo_dir / "docs" / "logo.png",
+        repo_dir / ".github" / "logo.png"
     ]
     for p in logo_candidates:
         if p.exists():
             mime = "image/svg+xml" if p.suffix == ".svg" else f"image/{p.suffix.lstrip('.')}"
             data = p.read_bytes()
-            print(f"  [+] Found repository logo at: {p.relative_to(repo_dir)}")
+            print(f"  [+] Found local repository logo at: {p.relative_to(repo_dir)}")
             return f"data:{mime};base64," + base64.b64encode(data).decode("ascii")
+
     return ""
 
 def main():
@@ -341,7 +365,7 @@ def main():
 
     avatar_cache_dir = out_dir / "avatars_cache"
     avatars_b64 = fetch_contributor_avatars(contributors, avatar_cache_dir)
-    logo_b64 = find_and_encode_logo(repo_dir)
+    logo_b64 = find_and_encode_logo(repo_dir, github_repo, avatar_cache_dir, args.token)
 
     # Date range string
     date_range = "Evolution Timeline"

@@ -58,7 +58,7 @@
 | **Git 提交记录** | 本地 `.git` 目录 | 本地文件读权限 (`git log`) | 必须具备本地 Git 仓库历史 |
 | **Star 增长时间线** | GitHub API `/stargazers` | GitHub CLI 或 API Token | **自动平滑回退**：根据提交时间戳生成平滑拟合曲线 |
 | **贡献者高清头像** | GitHub 用户头像 API | 公网网络访问 | **自动内联降级**：生成精致的彩色字母徽章 |
-| **项目官方 Logo** | 本地图片文件 | 本地 `logo.png`/`logo.svg` | **自动回退**：生成标准手绘代码仓库勋章 |
+| **项目官方 Logo** | **优先 GitHub 仓库/Org 头像**，其次本地 `logo.png`/`logo.svg` | 公网网络 / 本地文件 | **自动回退**：生成标准手绘代码仓库勋章 |
 
 ### 授权方式说明
 
@@ -93,29 +93,35 @@ export GITHUB_TOKEN="ghp_your_token_here"
 - **Antigravity**：将本仓库克隆或复制到项目根目录的 `.agents/skills/` 或全局 `~/.gemini/config/skills/`；
 - **Codex / Cursor / Claude**：复制 `skills/repo-evolution-visualizer` 到你的 skills 目录即可。
 
-### 2. 在 AI 对话中直接调用
+### 2. 在 AI 对话中直接调用（两种模式）
 
-你只需向 AI 助手发送简单指令，例如：
+#### 模式 A：交互式网页看板模式
+向 AI 发送：
+> *“请使用 `repo-evolution-visualizer` skill 为当前仓库生成一套演化可视化网页，并整理出核心里程碑事件。”*
 
-```text
-请使用 repo-evolution-visualizer skill 为当前仓库生成一套一周年演化可视化网页，并整理出核心里程碑事件。
-```
+#### 模式 B：全自动静默导出 MP4 视频模式（无需人工录屏）
+向 AI 发送：
+> *“请帮我将当前仓库的演化动画自动录制并导出为高清 MP4 视频文件。”*
 
-AI 助手将自动执行数据提取、文案润色、模板编译与页面启动。
+AI 将直接在后台自动执行渲染、捕获 WebM 流并调用 FFmpeg 输出 CRF 14 的 H.264 MP4 视频！
 
 ### 3. 命令行独立运行
 
 你也可以脱离 AI 助手，直接在终端中一键提取并启动：
 
 ```bash
-# 1. 提取数据并自动打开浏览器
+# 方式 1：提取数据并自动在浏览器中打开网页
 python skills/repo-evolution-visualizer/scripts/launch_visualizer.py \
   --repo-path "C:\path\to\your\git\repo" \
   --github-repo "owner/repo" \
   --output-dir "./output_visualizer"
 
-# 2. 录制视频后，一键转码为 MP4
-.\skills\repo-evolution-visualizer\scripts\convert_to_mp4.bat
+# 方式 2：全自动静默提取、录制并直接输出 MP4 视频
+python skills/repo-evolution-visualizer/scripts/record_and_export_mp4.py \
+  --repo-path "C:\path\to\your\git\repo" \
+  --github-repo "owner/repo" \
+  --speed 3.0 \
+  --output-mp4 "./output_evolution.mp4"
 ```
 
 ---

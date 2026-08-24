@@ -111,7 +111,7 @@ Verify:
 - [ ] Left Star chart curve and milestone feed stream in chronological sync with commits.
 - [ ] Right contributor leaderboard tracks additions and sprint badges dynamically.
 
-### Step 5: Full-Page Ultra-HD Recording & MP4 Export
+### Step 5: Full-Page Ultra-HD Recording & MP4 Export (Interactive)
 
 1. In the top navbar, click **【录制整页视频】**.
 2. Select the current browser tab in the popup dialog.
@@ -119,13 +119,32 @@ Verify:
 4. When finished, click **【● 停止录制】** to download `astrbot_plugin_fullpage_evolution_*.webm`.
 5. Run `skills/repo-evolution-visualizer/scripts/convert_to_mp4.bat` to convert the downloaded `.webm` to publication-ready H.264 MP4 with CRF 14 clarity!
 
+### Step 6: Fully Automated Headless MP4 Generation (AI-Driven)
+
+When the user asks you (the AI agent) to directly produce an MP4 video file without manual screen-recording interactions, run the end-to-end automated pipeline script:
+
+```bash
+python skills/repo-evolution-visualizer/scripts/record_and_export_mp4.py \
+  --repo-path "<PATH_TO_TARGET_REPO>" \
+  --github-repo "<OWNER/REPO>" \
+  --speed 3.0 \
+  --output-mp4 "<DESTINATION_PATH.mp4>"
+```
+
+This script will:
+1. Extract all Git, Star, and Contributor data.
+2. Launch a background browser with `?autorecord=1`.
+3. Capture the full animation.
+4. Automatically invoke FFmpeg to convert the `.webm` to an ultra-crisp H.264 MP4 video.
+
 ---
 
 ## 🛠️ Helper Scripts Index
 
 | Script | Path | Purpose |
 | :--- | :--- | :--- |
-| **`extract_repo_data.py`** | [scripts/extract_repo_data.py](./scripts/extract_repo_data.py) | Universal Git & GitHub data extractor |
+| **`record_and_export_mp4.py`** | [scripts/record_and_export_mp4.py](./scripts/record_and_export_mp4.py) | **AI-Automated End-to-End MP4 pipeline** (Extract + Render + Convert) |
+| **`extract_repo_data.py`** | [scripts/extract_repo_data.py](./scripts/extract_repo_data.py) | Universal Git & GitHub data extractor (Stars, Avatars, Logo, Commits) |
 | **`launch_visualizer.py`** | [scripts/launch_visualizer.py](./scripts/launch_visualizer.py) | One-command build and browser launcher |
 | **`convert_to_mp4.bat`** | [scripts/convert_to_mp4.bat](./scripts/convert_to_mp4.bat) | 1-click WebM to H.264 MP4 converter |
 | **`visualizer_template.html`** | [templates/visualizer_template.html](./templates/visualizer_template.html) | Standalone Hand-Drawn Doodle visualizer |

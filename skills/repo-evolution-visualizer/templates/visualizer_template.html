@@ -1366,6 +1366,13 @@
         isPlaying = false;
         playText.textContent = "播放";
         playIcon.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          setTimeout(() => {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+              stopRecording();
+            }
+          }, 1200);
+        }
         return;
       }
 
@@ -2099,18 +2106,55 @@
       }
     }
 
-    btnRecord.addEventListener("click", () => {
-      if (mediaRecorder && mediaRecorder.state === "recording") {
-        stopRecording();
-      } else {
-        startRecording();
-      }
-    });
+    // Auto-record query parameter handling (for automated AI rendering pipeline)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("autorecord") === "1" || urlParams.get("auto") === "1") {
+      const targetSpeed = parseFloat(urlParams.get("speed")) || 2;
+      playbackSpeed = targetSpeed;
+      document.querySelectorAll(".speed-pill").forEach(p => {
+        if (parseFloat(p.dataset.speed) === targetSpeed) p.classList.add("active");
+        else p.classList.remove("active");
+      });
 
-    // Auto-start playback
-    setTimeout(() => {
-      if (!isPlaying) togglePlay();
-    }, 400);
+      setTimeout(() => {
+        if (!isPlaying) {
+          recordedChunks = [];
+          const stream = canvas.captureStream ? canvas.captureStream(60) : canvas.mozCaptureStream(60);
+          const mimeType = getSupportedMimeType();
+          const options = Object.assign({ videoBitsPerSecond: 25000000 }, mimeType ? { mimeType } : {});
+          mediaRecorder = new MediaRecorder(stream, options);
+          mediaRecorder.ondataavailable = e => {
+            if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+          };
+          mediaRecorder.onstop = () => {
+            const finalMime = mediaRecorder.mimeType || mimeType || "video/webm";
+            const ext = finalMime.includes("mp4") ? "mp4" : "webm";
+            const blob = new Blob(recordedChunks, { type: finalMime });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.style.display = "none";
+            a.href = url;
+            a.download = `repo_evolution_auto_${Date.now()}.${ext}`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }, 1000);
+            window.__RECORDING_DONE__ = true;
+          };
+          mediaRecorder.start(1000);
+          btnRecord.innerHTML = '<span style="color: #ff6b6b; font-weight: 800;">● 自动录制中</span>';
+          btnRecord.classList.add("primary");
+          restartSim();
+        }
+      }, 500);
+    } else {
+      // Normal browser auto-start playback
+      setTimeout(() => {
+        if (!isPlaying) togglePlay();
+      }, 400);
+    }
   </script>
 </body>
 </html>
