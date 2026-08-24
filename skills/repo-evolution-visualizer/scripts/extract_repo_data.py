@@ -187,6 +187,8 @@ def fetch_github_stars(github_repo: str, token: str = None) -> list:
                     except Exception:
                         pass
             if star_events:
+                for idx, event in enumerate(star_events):
+                    event["count"] = idx + 1
                 print(f"  [+] Successfully fetched {len(star_events)} stars via GitHub CLI.")
                 return star_events
     except Exception as e:
@@ -226,6 +228,8 @@ def fetch_github_stars(github_repo: str, token: str = None) -> list:
             break
 
     if star_events:
+        for idx, event in enumerate(star_events):
+            event["count"] = idx + 1
         print(f"  [+] Successfully fetched {len(star_events)} stars via GitHub REST API.")
     else:
         print("  [-] Could not fetch live star events. Will use synthetic timeline points.")

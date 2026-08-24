@@ -1382,16 +1382,18 @@
       const maxDateStr = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth()+1).padStart(2,'0')}-${String(endDateObj.getDate()).padStart(2,'0')}`;
 
       if (hasStars) {
-        allStarDataPoints = data.stars.map(s => {
+        let cumStars = 0;
+        allStarDataPoints = data.stars.map((s, idx) => {
+          cumStars = (typeof s.count === "number" && !isNaN(s.count)) ? s.count : (idx + 1);
           const dt = new Date(s.timestamp * 1000);
           return [
             `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`,
-            s.count,
+            cumStars,
             s.user || "stargazer",
             s.timestamp
           ];
         });
-        maxMetricCount = (data.project && data.project.totalStars) || (allStarDataPoints.length > 0 ? allStarDataPoints[allStarDataPoints.length - 1][1] : 0);
+        maxMetricCount = (data.project && typeof data.project.totalStars === "number" && data.project.totalStars > 0) ? data.project.totalStars : (allStarDataPoints.length > 0 ? (allStarDataPoints[allStarDataPoints.length - 1][1] || 0) : 0);
       } else {
         let cum = 0;
         allStarDataPoints = (data.commits || []).map(c => {
@@ -1502,17 +1504,19 @@
       lastEChartsUpdate = now;
 
       const visiblePoints = allStarDataPoints.filter(p => p[3] <= currentSimTime);
-      const currentMetricCount = visiblePoints.length > 0 ? visiblePoints[visiblePoints.length - 1][1] : 0;
-      
+      const lastPoint = visiblePoints.length > 0 ? visiblePoints[visiblePoints.length - 1] : null;
+      const currentMetricCount = (lastPoint && typeof lastPoint[1] === "number" && !isNaN(lastPoint[1])) ? lastPoint[1] : 0;
+      const safeMaxCount = (typeof maxMetricCount === "number" && !isNaN(maxMetricCount)) ? maxMetricCount : 0;
+
       if (isStarMode) {
         starDisplay.textContent = `${currentMetricCount.toLocaleString()} Stars`;
         if (drawerStarBadge) {
-          drawerStarBadge.textContent = `${currentMetricCount.toLocaleString()} / ${maxMetricCount.toLocaleString()} ⭐`;
+          drawerStarBadge.textContent = `${currentMetricCount.toLocaleString()} / ${safeMaxCount.toLocaleString()} ⭐`;
         }
       } else {
         starDisplay.textContent = `${currentMetricCount.toLocaleString()} 提交`;
         if (drawerStarBadge) {
-          drawerStarBadge.textContent = `${currentMetricCount.toLocaleString()} / ${maxMetricCount.toLocaleString()} 提交`;
+          drawerStarBadge.textContent = `${currentMetricCount.toLocaleString()} / ${safeMaxCount.toLocaleString()} 提交`;
         }
       }
 
